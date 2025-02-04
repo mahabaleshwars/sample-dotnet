@@ -1,0 +1,49 @@
+name: Issue #598
+
+on:
+  workflow_dispatch:
+
+jobs:
+
+  benchmark:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macOS-latest, macOS-13]
+      fail-fast: false
+
+    env:
+      DOTNET_VERSION: 9.0.x
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Nuget cache
+      uses: actions/cache@v4
+      with:
+        path:
+          ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+
+    # - name: Build
+    #   run: dotnet build -c Release
+    #   working-directory: ./src/Lynx.Benchmark
+
+    # - name: Run ${{ github.event.inputs.benchmark_name }} benchmark
+    #   if: matrix.os == 'windows-latest'
+    #   run: dotnet run -c Release --no-build --filter '${{ github.event.inputs.benchmark_name }}'
+    #   working-directory: ./src/Lynx.Benchmark
+
+    # - name: Run ${{ github.event.inputs.benchmark_name }} benchmark with sudo
+    #   if: matrix.os != 'windows-latest'
+    #   run: sudo dotnet run -c Release --no-build --filter '${{ github.event.inputs.benchmark_name }}'
+    #   working-directory: ./src/Lynx.Benchmark
