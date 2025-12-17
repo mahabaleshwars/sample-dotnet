@@ -1,0 +1,32 @@
+name: Repro punycode deprecation in setup-dotnet v5
+
+on:
+  workflow_dispatch:
+
+jobs:
+  repro:
+    runs-on: ubuntu-latest
+    # Enable Node.js deprecation stack traces for the action runtime
+    env:
+      NODE_OPTIONS: --trace-deprecation
+    steps:
+      - name: Create example global.json
+        run: |
+          cat > global.json <<'JSON'
+          {
+            "sdk": {
+              "version": "8.0.100"
+            }
+          }
+          JSON
+
+      - name: Setup .NET (actions/setup-dotnet@v5)
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+          cache: false
+
+      - name: Verify environment
+        run: |
+          dotnet --info
+          echo "Node version: $(node -v)"
