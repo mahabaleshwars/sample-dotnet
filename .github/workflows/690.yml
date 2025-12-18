@@ -21,7 +21,7 @@ jobs:
           JSON
 
       - name: Setup .NET (actions/setup-dotnet@v5)
-        uses: salmanmkc/setup-dotnet@fix/license-metadata
+        uses: mahabaleshwars/setup-dotnet@bug/690-test
         with:
           global-json-file: global.json
           cache: false
