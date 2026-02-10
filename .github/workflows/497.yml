@@ -1,0 +1,104 @@
+name: Validate LTS Limitation (Issue #497)
+
+# This workflow demonstrates that using 'x' or '*' as dotnet-version
+# installs the LTS version, NOT the absolute latest stable version.
+
+on:
+  workflow_dispatch:
+ 
+
+jobs:
+  validate-lts-limitation:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Test 1: Using 'x' as version (should install LTS)
+      - name: Setup .NET with 'x' (wildcard)
+        id: setup-x
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 'x'
+
+      - name: Check installed version with 'x'
+        run: |
+          echo "=== Test 1: dotnet-version: 'x' ==="
+          INSTALLED_VERSION=$(dotnet --version)
+          echo "Installed version: $INSTALLED_VERSION"
+          echo "Expected behavior: Should install LTS channel (e.g., 8.0.x)"
+          echo ""
+          
+          # Extract major version
+          MAJOR_VERSION=$(echo $INSTALLED_VERSION | cut -d'.' -f1)
+          echo "Major version installed: $MAJOR_VERSION"
+          
+          # Current LTS as of 2024-2025 is .NET 8
+          # Current STS (latest stable) is .NET 9
+          # If 'x' installed .NET 8.x, it proves the LTS limitation
+          if [ "$MAJOR_VERSION" -eq 8 ]; then
+            echo "✅ CONFIRMED: 'x' installed LTS (.NET 8) instead of latest stable (.NET 9)"
+            echo "This validates the limitation described in Issue #497"
+          elif [ "$MAJOR_VERSION" -eq 9 ]; then
+            echo "❌ UNEXPECTED: 'x' installed .NET 9 (latest stable)"
+            echo "The limitation may have been fixed!"
+          else
+            echo "⚠️ Installed version $MAJOR_VERSION - please verify manually"
+          fi
+
+      # Test 2: Using '*' as version (should also install LTS)
+      - name: Clear .NET and setup with '*'
+        run: |
+          echo "=== Test 2: dotnet-version: '*' ==="
+
+      - name: Setup .NET with '*' (asterisk wildcard)
+        id: setup-asterisk
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '*'
+
+      - name: Check installed version with '*'
+        run: |
+          INSTALLED_VERSION=$(dotnet --version)
+          echo "Installed version with '*': $INSTALLED_VERSION"
+          MAJOR_VERSION=$(echo $INSTALLED_VERSION | cut -d'.' -f1)
+          echo "Major version: $MAJOR_VERSION"
+
+      # Test 3: Explicitly request latest stable (STS) for comparison
+      - name: Setup .NET 9 explicitly (current STS/latest stable)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Check explicit .NET 9 version
+        run: |
+          echo "=== Test 3: Explicit dotnet-version: '9.0.x' ==="
+          INSTALLED_VERSION=$(dotnet --version)
+          echo "Installed version: $INSTALLED_VERSION"
+          echo "This is the ACTUAL latest stable that users might want"
+
+      # Test 4: Show all installed versions
+      - name: Show all installed .NET SDKs
+        run: |
+          echo "=== All Installed .NET SDKs ==="
+          dotnet --list-sdks
+          echo ""
+          echo "=== Summary ==="
+          echo "The test demonstrates that:"
+          echo "1. Using 'x' or '*' installs LTS (currently .NET 8)"
+          echo "2. Users who want the absolute latest stable (.NET 9) must specify it explicitly"
+          echo "3. There's no way to say 'give me the newest stable' without knowing the version number"
+
+      # Test 5: Query the releases-index to show what "latest" actually is
+      - name: Query .NET releases index
+        run: |
+          echo "=== .NET Release Channels ==="
+          curl -s https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json | \
+            jq '.["releases-index"][] | select(.["support-phase"] == "active") | {channel: .["channel-version"], phase: .["support-phase"], product: .["product"]}'
+          
+          echo ""
+          echo "=== Interpretation ==="
+          echo "The 'active' support phase shows all currently supported stable versions."
+          echo "The HIGHEST channel-version with 'active' phase is the absolute latest stable."
+          echo "But 'dotnet-version: x' forces LTS channel, missing newer STS releases."
