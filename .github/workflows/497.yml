@@ -5,20 +5,25 @@ name: Validate LTS Limitation (Issue #497)
 
 on:
   workflow_dispatch:
- 
 
 jobs:
   validate-lts-limitation:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+
+      - name: Clear .NET cache
+        run: rm -rf ~/.dotnet
+
+      - name: Cache clear
+        run: rm -rf ~/.nuget/packages
 
       # Test 1: Using 'x' as version (should install LTS)
       - name: Setup .NET with 'x' (wildcard)
         id: setup-x
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 'x'
 
@@ -29,11 +34,11 @@ jobs:
           echo "Installed version: $INSTALLED_VERSION"
           echo "Expected behavior: Should install LTS channel (e.g., 8.0.x)"
           echo ""
-          
+
           # Extract major version
           MAJOR_VERSION=$(echo $INSTALLED_VERSION | cut -d'.' -f1)
           echo "Major version installed: $MAJOR_VERSION"
-          
+
           # Current LTS as of 2024-2025 is .NET 8
           # Current STS (latest stable) is .NET 9
           # If 'x' installed .NET 8.x, it proves the LTS limitation
@@ -96,7 +101,7 @@ jobs:
           echo "=== .NET Release Channels ==="
           curl -s https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json | \
             jq '.["releases-index"][] | select(.["support-phase"] == "active") | {channel: .["channel-version"], phase: .["support-phase"], product: .["product"]}'
-          
+
           echo ""
           echo "=== Interpretation ==="
           echo "The 'active' support phase shows all currently supported stable versions."
