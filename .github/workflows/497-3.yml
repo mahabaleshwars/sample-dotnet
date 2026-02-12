@@ -1,0 +1,99 @@
+name: Validate dotnet-quality with hardcoded version
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test-dotnet-quality:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 9.0.x with GA quality
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+          dotnet-quality: 'ga'
+
+      - name: Verify installed version
+        run: |
+          echo "=== Installed .NET SDK Version ==="
+          dotnet --version
+
+          echo ""
+          echo "=== All Installed SDKs ==="
+          dotnet --list-sdks
+
+          echo ""
+          echo "=== All Installed Runtimes ==="
+          dotnet --list-runtimes
+
+          echo ""
+          echo "=== .NET Info ==="
+          dotnet --info
+
+  # This job proves the problem - hardcoded version doesn't auto-update
+  compare-versions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 9.0.x GA (hardcoded)
+        id: dotnet9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+          dotnet-quality: 'ga'
+
+      - name: Capture installed version
+        run: |
+          INSTALLED_VERSION=$(dotnet --version)
+          echo "installed-version=$INSTALLED_VERSION" >> $GITHUB_ENV
+          echo "Installed SDK version: $INSTALLED_VERSION"
+
+      - name: Check if this is actually the latest .NET
+        run: |
+          echo "=== Installed version ==="
+          echo "${{ env.installed-version }}"
+
+          echo ""
+          echo "=== Fetching latest release info from Microsoft ==="
+          LATEST_RELEASE=$(curl -s https://dotnetcli.blob.azure.windows.net/dotnet/release-metadata/releases-index.json)
+
+          echo ""
+          echo "=== Available .NET channels ==="
+          echo "$LATEST_RELEASE" | jq '.["releases-index"][] | select(."support-phase" != "eol") | {channel: ."channel-version", "support-phase": ."support-phase", "latest-sdk": ."latest-sdk"}'
+
+          echo ""
+          echo "=== The problem ==="
+          echo "Hardcoded '9.0.x' will ALWAYS install .NET 9, even when .NET 10+ is available."
+          echo "There is no way to say 'latest' and automatically get the newest major version."
+
+  # Test different quality levels to show what dotnet-quality CAN do
+  test-quality-levels:
+    strategy:
+      matrix:
+        quality: [ga, preview]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 9.0.x with ${{ matrix.quality }} quality
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+          dotnet-quality: ${{ matrix.quality }}
+
+      - name: Show installed version
+        run: |
+          echo "Quality: ${{ matrix.quality }}"
+          echo "SDK Version: $(dotnet --version)"
+          dotnet --list-sdks
