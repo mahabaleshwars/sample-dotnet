@@ -1,0 +1,241 @@
+name: "Test .NET Version + Quality Matrix"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  # -------------------------------------------------------
+  # JOB 1: Major version (A) format with all quality values
+  # -------------------------------------------------------
+  major-version-quality:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dotnet-version: ['6', '7', '8', '9', '10']
+        dotnet-quality: ['daily', 'signed', 'validated', 'preview', 'ga']
+    name: "${{ matrix.dotnet-version }} + ${{ matrix.dotnet-quality }}"
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup .NET ${{ matrix.dotnet-version }} with quality ${{ matrix.dotnet-quality }}
+        uses: actions/setup-dotnet@v5
+        id: setup
+        with:
+          dotnet-version: ${{ matrix.dotnet-version }}
+          dotnet-quality: ${{ matrix.dotnet-quality }}
+      - name: Print installed version
+        run: |
+          echo "=== Input ==="
+          echo "dotnet-version: ${{ matrix.dotnet-version }}"
+          echo "dotnet-quality: ${{ matrix.dotnet-quality }}"
+          echo "=== Output ==="
+          echo "Installed version: ${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --version
+          dotnet --list-sdks
+
+  # -------------------------------------------------------
+  # JOB 2: Major.x wildcard (A.x) format with all quality values
+  # -------------------------------------------------------
+  major-wildcard-quality:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dotnet-version: ['6.x', '7.x', '8.x', '9.x', '10.x']
+        dotnet-quality: ['daily', 'signed', 'validated', 'preview', 'ga']
+    name: "${{ matrix.dotnet-version }} + ${{ matrix.dotnet-quality }}"
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup .NET ${{ matrix.dotnet-version }} with quality ${{ matrix.dotnet-quality }}
+        uses: actions/setup-dotnet@v5
+        id: setup
+        with:
+          dotnet-version: ${{ matrix.dotnet-version }}
+          dotnet-quality: ${{ matrix.dotnet-quality }}
+      - name: Print installed version
+        run: |
+          echo "=== Input ==="
+          echo "dotnet-version: ${{ matrix.dotnet-version }}"
+          echo "dotnet-quality: ${{ matrix.dotnet-quality }}"
+          echo "=== Output ==="
+          echo "Installed version: ${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --version
+          dotnet --list-sdks
+
+  # -------------------------------------------------------
+  # JOB 3: Major.Minor (A.B) format with all quality values
+  # -------------------------------------------------------
+  major-minor-quality:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dotnet-version: ['6.0', '7.0', '8.0', '9.0', '10.0']
+        dotnet-quality: ['daily', 'signed', 'validated', 'preview', 'ga']
+    name: "${{ matrix.dotnet-version }} + ${{ matrix.dotnet-quality }}"
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup .NET ${{ matrix.dotnet-version }} with quality ${{ matrix.dotnet-quality }}
+        uses: actions/setup-dotnet@v5
+        id: setup
+        with:
+          dotnet-version: ${{ matrix.dotnet-version }}
+          dotnet-quality: ${{ matrix.dotnet-quality }}
+      - name: Print installed version
+        run: |
+          echo "=== Input ==="
+          echo "dotnet-version: ${{ matrix.dotnet-version }}"
+          echo "dotnet-quality: ${{ matrix.dotnet-quality }}"
+          echo "=== Output ==="
+          echo "Installed version: ${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --version
+          dotnet --list-sdks
+
+  # -------------------------------------------------------
+  # JOB 4: Major.Minor.x wildcard (A.B.x) format with all quality values
+  # -------------------------------------------------------
+  major-minor-wildcard-quality:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dotnet-version: ['6.0.x', '7.0.x', '8.0.x', '9.0.x', '10.0.x']
+        dotnet-quality: ['daily', 'signed', 'validated', 'preview', 'ga']
+    name: "${{ matrix.dotnet-version }} + ${{ matrix.dotnet-quality }}"
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup .NET ${{ matrix.dotnet-version }} with quality ${{ matrix.dotnet-quality }}
+        uses: actions/setup-dotnet@v5
+        id: setup
+        with:
+          dotnet-version: ${{ matrix.dotnet-version }}
+          dotnet-quality: ${{ matrix.dotnet-quality }}
+      - name: Print installed version
+        run: |
+          echo "=== Input ==="
+          echo "dotnet-version: ${{ matrix.dotnet-version }}"
+          echo "dotnet-quality: ${{ matrix.dotnet-quality }}"
+          echo "=== Output ==="
+          echo "Installed version: ${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --version
+          dotnet --list-sdks
+
+  # -------------------------------------------------------
+  # JOB 5: SDK band (A.B.Cxx) format with all quality values
+  # -------------------------------------------------------
+  sdk-band-quality:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # .NET 6
+          - dotnet-version: '6.0.4xx'
+            dotnet-quality: 'daily'
+          - dotnet-version: '6.0.4xx'
+            dotnet-quality: 'signed'
+          - dotnet-version: '6.0.4xx'
+            dotnet-quality: 'validated'
+          - dotnet-version: '6.0.4xx'
+            dotnet-quality: 'preview'
+          - dotnet-version: '6.0.4xx'
+            dotnet-quality: 'ga'
+          # .NET 7
+          - dotnet-version: '7.0.4xx'
+            dotnet-quality: 'daily'
+          - dotnet-version: '7.0.4xx'
+            dotnet-quality: 'signed'
+          - dotnet-version: '7.0.4xx'
+            dotnet-quality: 'validated'
+          - dotnet-version: '7.0.4xx'
+            dotnet-quality: 'preview'
+          - dotnet-version: '7.0.4xx'
+            dotnet-quality: 'ga'
+          # .NET 8
+          - dotnet-version: '8.0.4xx'
+            dotnet-quality: 'daily'
+          - dotnet-version: '8.0.4xx'
+            dotnet-quality: 'signed'
+          - dotnet-version: '8.0.4xx'
+            dotnet-quality: 'validated'
+          - dotnet-version: '8.0.4xx'
+            dotnet-quality: 'preview'
+          - dotnet-version: '8.0.4xx'
+            dotnet-quality: 'ga'
+          # .NET 9
+          - dotnet-version: '9.0.1xx'
+            dotnet-quality: 'daily'
+          - dotnet-version: '9.0.1xx'
+            dotnet-quality: 'signed'
+          - dotnet-version: '9.0.1xx'
+            dotnet-quality: 'validated'
+          - dotnet-version: '9.0.1xx'
+            dotnet-quality: 'preview'
+          - dotnet-version: '9.0.1xx'
+            dotnet-quality: 'ga'
+          # .NET 10
+          - dotnet-version: '10.0.1xx'
+            dotnet-quality: 'daily'
+          - dotnet-version: '10.0.1xx'
+            dotnet-quality: 'signed'
+          - dotnet-version: '10.0.1xx'
+            dotnet-quality: 'validated'
+          - dotnet-version: '10.0.1xx'
+            dotnet-quality: 'preview'
+          - dotnet-version: '10.0.1xx'
+            dotnet-quality: 'ga'
+    name: "${{ matrix.dotnet-version }} + ${{ matrix.dotnet-quality }}"
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup .NET ${{ matrix.dotnet-version }} with quality ${{ matrix.dotnet-quality }}
+        uses: actions/setup-dotnet@v5
+        id: setup
+        with:
+          dotnet-version: ${{ matrix.dotnet-version }}
+          dotnet-quality: ${{ matrix.dotnet-quality }}
+      - name: Print installed version
+        run: |
+          echo "=== Input ==="
+          echo "dotnet-version: ${{ matrix.dotnet-version }}"
+          echo "dotnet-quality: ${{ matrix.dotnet-quality }}"
+          echo "=== Output ==="
+          echo "Installed version: ${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --version
+          dotnet --list-sdks
+
+  # -------------------------------------------------------
+  # JOB 6: Exact version (A.B.C) - quality should be IGNORED
+  # -------------------------------------------------------
+  exact-version-quality-ignored:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dotnet-version: '8.0.404'
+            dotnet-quality: 'ga'
+          - dotnet-version: '8.0.404'
+            dotnet-quality: 'preview'
+          - dotnet-version: '9.0.102'
+            dotnet-quality: 'ga'
+          - dotnet-version: '9.0.102'
+            dotnet-quality: 'preview'
+    name: "Exact ${{ matrix.dotnet-version }} + ${{ matrix.dotnet-quality }} (should ignore quality)"
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup .NET ${{ matrix.dotnet-version }} with quality ${{ matrix.dotnet-quality }}
+        uses: actions/setup-dotnet@v5
+        id: setup
+        with:
+          dotnet-version: ${{ matrix.dotnet-version }}
+          dotnet-quality: ${{ matrix.dotnet-quality }}
+      - name: Print installed version
+        run: |
+          echo "=== Input ==="
+          echo "dotnet-version: ${{ matrix.dotnet-version }}"
+          echo "dotnet-quality: ${{ matrix.dotnet-quality }}"
+          echo "=== Output ==="
+          echo "Installed version: ${{ steps.setup.outputs.dotnet-version }}"
+          echo "NOTE: quality should be IGNORED for exact A.B.C versions"
+          dotnet --version
+          dotnet --list-sdks
