@@ -18,14 +18,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-
-
       # Test 1: Using 'x' as version (should install LTS)
       - name: Setup .NET with 'x' (wildcard)
         id: setup-x
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 'x'
+          dotnet-version: latest
 
       - name: Check installed version with 'x'
         run: |
