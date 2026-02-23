@@ -1,42 +1,121 @@
-name: 4 PR
+name: Test setup-dotnet architecture (PR#4)
 
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  test-setup-with-architecture-input:
-    name: setup-dotnet w/ architecture (${{ matrix.os }} / ${{ matrix.arch }})
+  # Job 1: Native arch with explicit input — uses your global.json (8.0.101)
+  test-native-arch:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
-        arch: [x64, arm64]
-        exclude:
-          # GitHub-hosted runners do not provide these combinations reliably.
-          - os: windows-latest
-            arch: arm64
+        include:
           - os: ubuntu-latest
+            arch: x64
+          - os: windows-latest
+            arch: x64
+          - os: macos-latest
             arch: arm64
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # - name: Clear toolcache
-      #   shell: pwsh
-      #   run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
-
-      - name: Setup dotnet (${{ matrix.arch }})
-        uses: ./
+      - name: Setup dotnet with architecture ${{ matrix.arch }}
+        uses: priya-kinthali/setup-dotnet@test-524
         with:
-          dotnet-version: |
-            8.0.416
-            8.0.x
-            9.0.308
-            10.0.101
+          dotnet-version: 8.0.x
           architecture: ${{ matrix.arch }}
+
+      - name: Verify dotnet installed and runs
+        shell: pwsh
+        run: |
+          $version = dotnet --version
+          Write-Host "Installed: $version"
+          if (-not $version.StartsWith("8.0")) { throw "Expected 8.0.x, got $version" }
+
+      - name: Verify DOTNET_ROOT is set
+        shell: pwsh
+        run: |
+          $root = $env:DOTNET_ROOT
+          Write-Host "DOTNET_ROOT = $root"
+          if (-not $root) { throw "DOTNET_ROOT is not set" }
+
+  # Job 2: Cross-arch install (x64 on arm64 macOS)
+  test-cross-arch:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup dotnet x64 on arm64 runner
+        uses: priya-kinthali/setup-dotnet@test-524
+        with:
+          dotnet-version: 8.0.x
+          architecture: x64
+
+      - name: Verify DOTNET_ROOT points to x64 subdirectory
+        shell: pwsh
+        run: |
+          $root = $env:DOTNET_ROOT
+          Write-Host "DOTNET_ROOT = $root"
+          if (-not ($root -match '[\\/]x64$')) {
+            throw "Expected DOTNET_ROOT to end with /x64, got: $root"
+          }
+
+      - name: Verify dotnet runs
+        shell: pwsh
+        run: |
+          $version = dotnet --version
+          Write-Host "Cross-arch installed: $version"
+          if (-not $version.StartsWith("8.0")) { throw "Expected 8.0.x, got $version" }
+
+  # Job 3: No architecture input — backward compatibility
+  test-no-arch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup dotnet without architecture input
+        uses: priya-kinthali/setup-dotnet@test-524
+        with:
+          dotnet-version: 8.0.x
 
       - name: Verify dotnet
         shell: pwsh
-        run: __tests__/verify-dotnet.ps1 -Patterns "^8.0.416$", "^9.0.308$", "^10.0.101$", "^8.0"
+        run: |
+          $version = dotnet --version
+          Write-Host "Installed: $version"
+          if (-not $version.StartsWith("8.0")) { throw "Expected 8.0.x, got $version" }
+
+      - name: Verify DOTNET_ROOT does NOT have arch subdirectory
+        shell: pwsh
+        run: |
+          $root = $env:DOTNET_ROOT
+          Write-Host "DOTNET_ROOT = $root"
+          if ($root -match '[\\/](x64|arm64|x86)$') {
+            throw "DOTNET_ROOT should not end with arch subdirectory when no arch input: $root"
+          }
+
+  # Job 4: Invalid architecture — should fail gracefully
+  test-invalid-arch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup dotnet with invalid architecture
+        id: setup
+        uses: priya-kinthali/setup-dotnet@test-524
+        continue-on-error: true
+        with:
+          dotnet-version: 8.0.x
+          architecture: sparc64
+
+      - name: Verify action failed
+        shell: pwsh
+        run: |
+          if ("${{ steps.setup.outcome }}" -ne "failure") {
+            throw "Expected action to fail for invalid arch 'sparc64'"
+          }
+          Write-Host "Correctly failed for invalid architecture"
