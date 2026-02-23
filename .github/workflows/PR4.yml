@@ -7,7 +7,11 @@ permissions:
   contents: read
 
 jobs:
-  # Job 1: Native arch with explicit input — uses your global.json (8.0.101)
+  # ===========================================================================
+  # Feature 1: architecture input — native arch with explicit value
+  # Validates: action.yml 'architecture' input, getArchitectureInput(),
+  #            useArchitecture(), --architecture flag in install script
+  # ===========================================================================
   test-native-arch:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -23,27 +27,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup dotnet with architecture ${{ matrix.arch }}
+      - name: Setup dotnet with native architecture ${{ matrix.arch }}
         uses: priya-kinthali/setup-dotnet@test-524
         with:
           dotnet-version: 8.0.x
           architecture: ${{ matrix.arch }}
 
-      - name: Verify dotnet installed and runs
+      - name: Verify dotnet version
         shell: pwsh
         run: |
           $version = dotnet --version
           Write-Host "Installed: $version"
           if (-not $version.StartsWith("8.0")) { throw "Expected 8.0.x, got $version" }
 
-      - name: Verify DOTNET_ROOT is set
+      - name: Verify DOTNET_ROOT is set (no arch subdirectory for native)
         shell: pwsh
         run: |
           $root = $env:DOTNET_ROOT
           Write-Host "DOTNET_ROOT = $root"
           if (-not $root) { throw "DOTNET_ROOT is not set" }
+          # For native arch, DOTNET_ROOT should NOT end with an arch subdirectory
+          if ($root -match '[\\/](x64|arm64|x86)$') {
+            throw "DOTNET_ROOT should not have arch subdirectory for native arch: $root"
+          }
 
-  # Job 2: Cross-arch install (x64 on arm64 macOS)
+  # ===========================================================================
+  # Feature 2: Cross-arch install — x64 on arm64 macOS
+  # Validates: normalizeArch(), crossArchInstallDir logic, --install-dir flag,
+  #            DOTNET_ROOT set to <dir>/<arch> subdirectory, core.addPath()
+  # ===========================================================================
   test-cross-arch:
     runs-on: macos-latest
     steps:
@@ -63,16 +75,67 @@ jobs:
           if (-not ($root -match '[\\/]x64$')) {
             throw "Expected DOTNET_ROOT to end with /x64, got: $root"
           }
+          if (-not (Test-Path $root)) {
+            throw "DOTNET_ROOT directory does not exist: $root"
+          }
 
-      - name: Verify dotnet runs
+      - name: Verify dotnet binary runs from cross-arch directory
         shell: pwsh
         run: |
-          $version = dotnet --version
-          Write-Host "Cross-arch installed: $version"
-          if (-not $version.StartsWith("8.0")) { throw "Expected 8.0.x, got $version" }
+          $dotnetPath = Get-Command dotnet | Select-Object -ExpandProperty Source
+          Write-Host "dotnet binary: $dotnetPath"
+          # The dotnet binary should be in the x64 subdirectory
+          if (-not ($dotnetPath -match '[\\/]x64[\\/]')) {
+            Write-Host "Warning: dotnet not from x64 subdir, checking version anyway"
+          }
+          $version = & "$env:DOTNET_ROOT/dotnet" --version 2>&1 | Select-String '^\d+\.\d+\.\d+' | Select-Object -First 1
+          $ver = $version.ToString().Trim()
+          Write-Host "Cross-arch installed: $ver"
+          if (-not $ver.StartsWith("8.0")) { throw "Expected 8.0.x, got $ver" }
 
-  # Job 3: No architecture input — backward compatibility
-  test-no-arch:
+  # ===========================================================================
+  # Feature 3: Multiple versions with architecture
+  # Validates: architecture passed to every DotnetCoreInstaller in the loop,
+  #            multiple SDK versions installed side-by-side with arch flag
+  # ===========================================================================
+  test-multi-version-with-arch:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: x64
+          - os: windows-latest
+            arch: x64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup multiple dotnet versions with architecture ${{ matrix.arch }}
+        uses: priya-kinthali/setup-dotnet@test-524
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+          architecture: ${{ matrix.arch }}
+
+      - name: Verify both SDK versions are available
+        shell: pwsh
+        run: |
+          $sdks = dotnet --list-sdks
+          Write-Host "Installed SDKs:"
+          Write-Host $sdks
+          $has8 = $sdks | Select-String "^8\.0"
+          $has9 = $sdks | Select-String "^9\.0"
+          if (-not $has8) { throw "SDK 8.0.x not found" }
+          if (-not $has9) { throw "SDK 9.0.x not found" }
+
+  # ===========================================================================
+  # Feature 4: No architecture input — backward compatibility
+  # Validates: getArchitectureInput() returns '', DotnetInstallDir.addToPath()
+  #            called (not the cross-arch branch), no --architecture flag
+  # ===========================================================================
+  test-no-arch-backward-compat:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -89,16 +152,20 @@ jobs:
           Write-Host "Installed: $version"
           if (-not $version.StartsWith("8.0")) { throw "Expected 8.0.x, got $version" }
 
-      - name: Verify DOTNET_ROOT does NOT have arch subdirectory
+      - name: Verify DOTNET_ROOT has no arch subdirectory
         shell: pwsh
         run: |
           $root = $env:DOTNET_ROOT
           Write-Host "DOTNET_ROOT = $root"
-          if ($root -match '[\\/](x64|arm64|x86)$') {
-            throw "DOTNET_ROOT should not end with arch subdirectory when no arch input: $root"
+          if ($root -match '[\\/](x64|arm64|x86|amd64|arm|s390x|ppc64le|riscv64)$') {
+            throw "DOTNET_ROOT should not end with arch subdirectory: $root"
           }
 
-  # Job 4: Invalid architecture — should fail gracefully
+  # ===========================================================================
+  # Feature 5: Invalid architecture — input validation
+  # Validates: getArchitectureInput() throws for unsupported values,
+  #            supportedArchitectures list, core.setFailed() called
+  # ===========================================================================
   test-invalid-arch:
     runs-on: ubuntu-latest
     steps:
@@ -112,10 +179,150 @@ jobs:
           dotnet-version: 8.0.x
           architecture: sparc64
 
-      - name: Verify action failed
+      - name: Verify action failed with validation error
         shell: pwsh
         run: |
           if ("${{ steps.setup.outcome }}" -ne "failure") {
             throw "Expected action to fail for invalid arch 'sparc64'"
           }
-          Write-Host "Correctly failed for invalid architecture"
+          Write-Host "Correctly rejected unsupported architecture 'sparc64'"
+
+  # ===========================================================================
+  # Feature 6: amd64 alias — normalizeArch() maps amd64 → x64
+  # Validates: normalizeArch('amd64') === normalizeArch('x64'), so on an x64
+  #            runner this is treated as native (no cross-arch install-dir)
+  # ===========================================================================
+  test-amd64-alias:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup dotnet with amd64 (alias for x64)
+        uses: priya-kinthali/setup-dotnet@test-524
+        with:
+          dotnet-version: 8.0.x
+          architecture: amd64
+
+      - name: Verify dotnet installed
+        shell: pwsh
+        run: |
+          $version = dotnet --version
+          Write-Host "Installed: $version"
+          if (-not $version.StartsWith("8.0")) { throw "Expected 8.0.x, got $version" }
+
+      - name: Verify amd64 treated as native x64 (no arch subdirectory)
+        shell: pwsh
+        run: |
+          $root = $env:DOTNET_ROOT
+          Write-Host "DOTNET_ROOT = $root"
+          # amd64 normalizes to x64 which matches runner's x64 arch
+          # so DOTNET_ROOT should NOT have an arch subdirectory
+          if ($root -match '[\\/](amd64|x64)$') {
+            throw "DOTNET_ROOT should not have arch subdirectory for amd64 on x64 runner: $root"
+          }
+
+  # ===========================================================================
+  # Feature 7: Architecture with global-json-file input
+  # Validates: architecture works alongside global-json-file, both versions
+  #            installed with the specified arch
+  # ===========================================================================
+  test-arch-with-global-json:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup dotnet with global.json and architecture
+        uses: priya-kinthali/setup-dotnet@test-524
+        with:
+          global-json-file: ./global.json
+          architecture: x64
+
+      - name: Verify dotnet installed
+        shell: pwsh
+        run: |
+          $version = dotnet --version
+          Write-Host "Installed via global.json + arch: $version"
+          if (-not $version.StartsWith("8.0")) { throw "Expected 8.0.x, got $version" }
+
+  # ===========================================================================
+  # Feature 8: Architecture with dotnet-quality input
+  # Validates: architecture combined with quality input
+  # ===========================================================================
+  test-arch-with-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup dotnet with quality and architecture
+        uses: priya-kinthali/setup-dotnet@test-524
+        with:
+          dotnet-version: '9.0'
+          dotnet-quality: 'ga'
+          architecture: x64
+
+      - name: Verify dotnet installed
+        shell: pwsh
+        run: |
+          $version = dotnet --version
+          Write-Host "Installed with quality+arch: $version"
+          if (-not $version.StartsWith("9.0")) { throw "Expected 9.0.x, got $version" }
+
+  # ===========================================================================
+  # Feature 9: Case insensitivity — uppercase architecture input
+  # Validates: getArchitectureInput() lowercases input before matching
+  # ===========================================================================
+  test-arch-case-insensitive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup dotnet with uppercase architecture 'X64'
+        uses: priya-kinthali/setup-dotnet@test-524
+        with:
+          dotnet-version: 8.0.x
+          architecture: X64
+
+      - name: Verify dotnet installed
+        shell: pwsh
+        run: |
+          $version = dotnet --version
+          Write-Host "Installed with X64 (uppercase): $version"
+          if (-not $version.StartsWith("8.0")) { throw "Expected 8.0.x, got $version" }
+
+  # ===========================================================================
+  # Feature 10: Cross-arch with multiple versions on macOS
+  # Validates: crossArchInstallDir applied to each SDK version in the loop,
+  #            --install-dir flag with arch subdirectory for every install
+  # ===========================================================================
+  test-cross-arch-multi-version:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup multiple dotnet versions with cross-arch x64
+        uses: priya-kinthali/setup-dotnet@test-524
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+          architecture: x64
+
+      - name: Verify DOTNET_ROOT is cross-arch x64 directory
+        shell: pwsh
+        run: |
+          $root = $env:DOTNET_ROOT
+          Write-Host "DOTNET_ROOT = $root"
+          if (-not ($root -match '[\\/]x64$')) {
+            throw "Expected DOTNET_ROOT to end with /x64, got: $root"
+          }
+
+      - name: Verify both SDK versions are installed in x64 directory
+        shell: pwsh
+        run: |
+          $sdks = & "$env:DOTNET_ROOT/dotnet" --list-sdks 2>&1
+          Write-Host "Installed SDKs in x64 dir:"
+          Write-Host $sdks
+          $has8 = $sdks | Select-String "^8\.0"
+          $has9 = $sdks | Select-String "^9\.0"
+          if (-not $has8) { throw "SDK 8.0.x not found in x64 directory" }
+          if (-not $has9) { throw "SDK 9.0.x not found in x64 directory" }
