@@ -1,0 +1,23 @@
+name: PR 4 quality check 
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-arch-with-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup dotnet with quality and architecture
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '9.0'
+          dotnet-quality: 'ga'
+
+      - name: Verify dotnet installed
+        shell: pwsh
+        run: |
+          $version = dotnet --version
+          Write-Host "Installed with quality+arch: $version"
+          if (-not $version.StartsWith("9.0")) { throw "Expected 9.0.x, got $version" }
