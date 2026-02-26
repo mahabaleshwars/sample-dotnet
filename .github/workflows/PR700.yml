@@ -92,7 +92,8 @@ jobs:
 
       - name: Assert expected failure for Windows unsupported arch
         if: steps.setup.outcome == 'failure'
-        run: echo "Correctly failed on unsupported Windows architecture: ${{ matrix.architecture }}"
+        run: |
+            echo "Correctly failed on unsupported Windows architecture: ${{ matrix.architecture }}"
 
   linux-unsupported-arch:
     runs-on: ubuntu-latest
@@ -116,7 +117,8 @@ jobs:
 
       - name: Assert expected failure for Linux unsupported arch
         if: steps.setup.outcome == 'failure'
-        run: echo "Correctly failed on unsupported Linux architecture: ${{ matrix.architecture }}"
+        run: |
+              echo "Correctly failed on unsupported Linux architecture: ${{ matrix.architecture }}"
 
   macos-unsupported-arch:
     runs-on: macos-latest
@@ -140,4 +142,5 @@ jobs:
 
       - name: Assert expected failure for MacOS unsupported arch
         if: steps.setup.outcome == 'failure'
-        run: echo "Correctly failed on unsupported MacOS architecture: ${{ matrix.architecture }}"
+        run: |
+            echo "Correctly failed on unsupported MacOS architecture: ${{ matrix.architecture }}"
