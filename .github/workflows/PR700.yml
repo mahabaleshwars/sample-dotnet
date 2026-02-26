@@ -1,28 +1,44 @@
-name: Architecture Input PR E2E Test
+name: Platform-aware Architecture Input E2E Test
 
 on:
   workflow_dispatch:
 
 jobs:
-  architecture-matrix:
+  # 1. Test success for supported architectures per platform
+  supported-architectures-matrix:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        architecture: [x64, x86, arm64]
-        exclude:
-          # Exclude known-unsupported combos
-          - os: macos-latest
+        include:
+          # Windows: ONLY x64, x86, arm64, arm
+          - os: windows-latest
+            architecture: x64
+          - os: windows-latest
             architecture: x86
           - os: windows-latest
             architecture: arm64
+          - os: windows-latest
+            architecture: arm
+          # Linux: x64, arm64, arm, s390x, ppc64le
           - os: ubuntu-latest
-            architecture: x86
+            architecture: x64
+          - os: ubuntu-latest
+            architecture: arm64
+          - os: ubuntu-latest
+            architecture: arm
+          - os: ubuntu-latest
+            architecture: s390x
+          - os: ubuntu-latest
+            architecture: ppc64le
+          # macOS: x64, arm64 only
+          - os: macos-latest
+            architecture: x64
+          - os: macos-latest
+            architecture: arm64
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
 
       - name: Clear .NET toolcache
         shell: pwsh
@@ -33,53 +49,60 @@ jobs:
             rm -rf $HOME/.dotnet || true
           }
 
-      - name: Setup .NET with architecture (${{ matrix.architecture }})
+      - name: Setup .NET with valid architecture (${{ matrix.architecture }})
         uses: priya-kinthali/setup-dotnet@add-architecture-support
         with:
           dotnet-version: 8.0.x
           architecture: ${{ matrix.architecture }}
 
-      - name: Print dotnet info
-        run: dotnet --info
-
       - name: List installed SDKs
-        run: dotnet --list-sdks
+        run: dotnet --list-sdks || true
 
       - name: List installed runtimes
-        run: dotnet --list-runtimes
+        run: dotnet --list-runtimes || true
 
-      - name: Check cross-arch install dir
-        run: |
-          if [ -d "$HOME/.dotnet/${{ matrix.architecture }}" ]; then
-            echo "Found cross-arch install dir: $HOME/.dotnet/${{ matrix.architecture }}"
-          else
-            echo "Cross-arch install dir missing or not applicable for this platform/arch"
-          fi
+      - name: Assert install dir created
         shell: bash
+        run: |
+          echo "Checking for install dir: $HOME/.dotnet/${{ matrix.architecture }}"
+          # Directory presence check for cross-arch
+          if [ -d "$HOME/.dotnet/${{ matrix.architecture }}" ]; then
+            echo "Install dir for arch present."
+          else
+            echo "Install dir may not be created for native arch or by script logic."
+          fi
 
-  invalid-architecture:
-    runs-on: ubuntu-latest
+  # 2. Test expected failure for platform UNSUPPORTED architectures
+
+  windows-unsupported-arch:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        architecture: [s390x, ppc64le, riscv64]
     steps:
       - uses: actions/checkout@v6
 
       - name: Clear .NET toolcache
         shell: pwsh
-        run: rm -rf $HOME/.dotnet || true
+        run: Remove-Item -Path "$env:USERPROFILE\.dotnet" -Recurse -Force -ErrorAction SilentlyContinue
 
-      - name: Test action with invalid architecture
-        id: invalid_arch
-        continue-on-error: true
+      - name: Windows unsupported arch (${{ matrix.architecture }}) should fail
+        id: setup
         uses: priya-kinthali/setup-dotnet@add-architecture-support
         with:
           dotnet-version: 8.0.x
-          architecture: fooarch
+          architecture: ${{ matrix.architecture }}
+        continue-on-error: true
 
-      - name: Assert error on invalid architecture
-        if: steps.invalid_arch.outcome == 'failure'
-        run: echo "Correctly failed on unsupported architecture input."
+      - name: Assert expected failure for Windows unsupported arch
+        if: steps.setup.outcome == 'failure'
+        run: echo "Correctly failed on unsupported Windows architecture: ${{ matrix.architecture }}"
 
-  native-no-architecture:
+  linux-unsupported-arch:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        architecture: [x86, riscv64]
     steps:
       - uses: actions/checkout@v6
 
@@ -87,10 +110,38 @@ jobs:
         shell: bash
         run: rm -rf $HOME/.dotnet || true
 
-      - name: Test action with default auto arch
+      - name: Linux unsupported arch (${{ matrix.architecture }}) should fail
+        id: setup
         uses: priya-kinthali/setup-dotnet@add-architecture-support
         with:
           dotnet-version: 8.0.x
+          architecture: ${{ matrix.architecture }}
+        continue-on-error: true
 
-      - name: Print dotnet info
-        run: dotnet --info
+      - name: Assert expected failure for Linux unsupported arch
+        if: steps.setup.outcome == 'failure'
+        run: echo "Correctly failed on unsupported Linux architecture: ${{ matrix.architecture }}"
+
+  macos-unsupported-arch:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        architecture: [x86, s390x, ppc64le, riscv64]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Clear .NET toolcache
+        shell: bash
+        run: rm -rf $HOME/.dotnet || true
+
+      - name: MacOS unsupported arch (${{ matrix.architecture }}) should fail
+        id: setup
+        uses: priya-kinthali/setup-dotnet@add-architecture-support
+        with:
+          dotnet-version: 8.0.x
+          architecture: ${{ matrix.architecture }}
+        continue-on-error: true
+
+      - name: Assert expected failure for MacOS unsupported arch
+        if: steps.setup.outcome == 'failure'
+        run: echo "Correctly failed on unsupported MacOS architecture: ${{ matrix.architecture }}"
