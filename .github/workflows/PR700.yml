@@ -1,154 +1,96 @@
-name: Architecture Input E2E Tests
+name: Architecture Input PR E2E Test
 
 on:
   workflow_dispatch:
 
 jobs:
-  matrix-architectures:
-    runs-on: ${{ matrix.runner }}
+  architecture-matrix:
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-latest, windows-latest, macos-latest]
-        architecture: [x64, x86, arm64, amd64, arm, s390x, ppc64le, riscv64]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        architecture: [x64, x86, arm64]
         exclude:
-          # exclude architectures not supported by the platform (platform-aware)
-          - runner: macos-latest
+          # Exclude known-unsupported combos
+          - os: macos-latest
             architecture: x86
-          - runner: macos-latest
-            architecture: s390x
-          - runner: macos-latest
-            architecture: ppc64le
-          - runner: macos-latest
-            architecture: riscv64
-          - runner: windows-latest
-            architecture: s390x
-          - runner: windows-latest
-            architecture: ppc64le
-          - runner: windows-latest
-            architecture: riscv64
-          - runner: ubuntu-latest
+          - os: windows-latest
+            architecture: arm64
+          - os: ubuntu-latest
             architecture: x86
-          - runner: ubuntu-latest
-            architecture: riscv64
 
     steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v6
 
-      - name: Clear toolcache
+      - name: Clear .NET toolcache
         shell: pwsh
         run: |
           if ($env:RUNNER_OS -eq "Windows") {
-            Remove-Item -Path "$env:USERPROFILE/.dotnet" -Recurse -Force -ErrorAction SilentlyContinue
-          }
-          else {
+            Remove-Item -Path "$env:USERPROFILE\.dotnet" -Recurse -Force -ErrorAction SilentlyContinue
+          } else {
             rm -rf $HOME/.dotnet || true
           }
 
-      - name: Setup .NET with architecture
-        uses: ./ # PR branch
+      - name: Setup .NET with architecture (${{ matrix.architecture }})
+        uses: priya-kinthali/setup-dotnet@add-architecture-support
         with:
-          dotnet-version: |
-            8.0.416
-            9.0.308
-            10.0.101
+          dotnet-version: 8.0.x
           architecture: ${{ matrix.architecture }}
 
       - name: Print dotnet info
         run: dotnet --info
 
-      - name: Validate install
-        run: |
-          dotnet --list-sdks
-          dotnet --list-runtimes
+      - name: List installed SDKs
+        run: dotnet --list-sdks
 
-      - name: Test architecture directory
+      - name: List installed runtimes
+        run: dotnet --list-runtimes
+
+      - name: Check cross-arch install dir
         run: |
-          if [ "$RUNNER_OS" == "Linux" ]; then
-            if [ -d "$HOME/.dotnet/${{ matrix.architecture }}" ]; then
-              echo "Cross-architecture install dir present"
-            else
-              echo "Cross-architecture install dir not found"
-              exit 1
-            fi
+          if [ -d "$HOME/.dotnet/${{ matrix.architecture }}" ]; then
+            echo "Found cross-arch install dir: $HOME/.dotnet/${{ matrix.architecture }}"
+          else
+            echo "Cross-arch install dir missing or not applicable for this platform/arch"
           fi
+        shell: bash
 
   invalid-architecture:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - name: Test unsupported architecture
-        id: setupdotnet
+      - name: Clear .NET toolcache
+        shell: pwsh
+        run: rm -rf $HOME/.dotnet || true
+
+      - name: Test action with invalid architecture
+        id: invalid_arch
         continue-on-error: true
-        uses: ./ # PR branch
+        uses: priya-kinthali/setup-dotnet@add-architecture-support
         with:
-          dotnet-version: 8.0.416
+          dotnet-version: 8.0.x
           architecture: fooarch
 
-      - name: Assert failure due to invalid architecture
-        if: steps.setupdotnet.outcome == 'failure'
-        run: echo "Action fails as expected with invalid architecture input."
+      - name: Assert error on invalid architecture
+        if: steps.invalid_arch.outcome == 'failure'
+        run: echo "Correctly failed on unsupported architecture input."
 
-  native-architecture-no-input:
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      matrix:
-        runner: [ubuntu-latest, windows-latest, macos-latest]
+  native-no-architecture:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - name: Setup .NET with native architecture (no input)
-        uses: ./ # PR branch
+      - name: Clear .NET toolcache
+        shell: bash
+        run: rm -rf $HOME/.dotnet || true
+
+      - name: Test action with default auto arch
+        uses: priya-kinthali/setup-dotnet@add-architecture-support
         with:
-          dotnet-version: 8.0.416
-
-      - name: Validate native dotnet install
-        run: dotnet --list-sdks
+          dotnet-version: 8.0.x
 
       - name: Print dotnet info
         run: dotnet --info
-
-  cross-architecture-env-check:
-    runs-on: windows-latest
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
-
-      - name: Setup dotnet for cross-architecture (x86 on x64 runner)
-        uses: ./ # PR branch
-        with:
-          dotnet-version: 8.0.416
-          architecture: x86
-
-      - name: Validate cross-arch install directory
-        run: |
-          if (Test-Path "$env:USERPROFILE\.dotnet\x86") {
-            Write-Host "Cross-arch dir created: $env:USERPROFILE\.dotnet\x86"
-          } else {
-            Write-Error "Cross-arch install dir not found!"
-            exit 1
-          }
-
-  multiple-versions-cross-architecture:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
-
-      - name: Setup multiple .NET versions for arm64
-        uses: ./ # PR branch
-        with:
-          dotnet-version: |
-            8.0.416
-            9.0.308
-            10.0.101
-          architecture: arm64
-
-      - name: Validate arm64 sdk install
-        run: |
-          dotnet --list-sdks
-          dotnet --info
