@@ -4,14 +4,13 @@ on:
   workflow_dispatch:
 
 jobs:
-  # 1. Test success for supported architectures per platform
   supported-architectures-matrix:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Windows: ONLY x64, x86, arm64, arm
+          # Windows: x64, x86, arm64, arm
           - os: windows-latest
             architecture: x64
           - os: windows-latest
@@ -31,7 +30,7 @@ jobs:
             architecture: s390x
           - os: ubuntu-latest
             architecture: ppc64le
-          # macOS: x64, arm64 only
+          # macOS: x64, arm64
           - os: macos-latest
             architecture: x64
           - os: macos-latest
@@ -65,14 +64,11 @@ jobs:
         shell: bash
         run: |
           echo "Checking for install dir: $HOME/.dotnet/${{ matrix.architecture }}"
-          # Directory presence check for cross-arch
           if [ -d "$HOME/.dotnet/${{ matrix.architecture }}" ]; then
             echo "Install dir for arch present."
           else
             echo "Install dir may not be created for native arch or by script logic."
           fi
-
-  # 2. Test expected failure for platform UNSUPPORTED architectures
 
   windows-unsupported-arch:
     runs-on: windows-latest
