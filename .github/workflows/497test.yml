@@ -1,0 +1,183 @@
+name: Feature Tests - Latest Version
+
+on:
+  workflow_dispatch:
+
+jobs:
+  # 1. Default Behavior: 'latest' -> Highest Stable Release (GA)
+  test-setup-latest-default:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Clear Toolcache
+        shell: pwsh
+        run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
+
+      - name: Setup Dotnet (Latest Stable)
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: latest
+      
+      - name: Verify Installation
+        shell: pwsh
+        run: |
+          $version = dotnet --version
+          Write-Host "Installed Version: $version"
+          # Ensure it's not a preview version (unless stable is preview, which shouldn't happen for GA default)
+          if ($version -match "preview" -or $version -match "rc") {
+            Write-Error "Expected stable version but got preview: $version"
+            exit 1
+          }
+          # Ensure it's a recent version (>= 8.0)
+          if ([System.Version]$version.Split('-')[0] -lt [System.Version]"8.0") {
+            Write-Error "Expected version >= 8.0 but got $version"
+            exit 1
+          }
+
+  # 2. Latest LTS: 'latest' + 'LTS' -> Highest LTS Stable
+  test-setup-latest-lts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Clear Toolcache
+        shell: pwsh
+        run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
+
+      - name: Setup Dotnet (Latest LTS)
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: latest
+          dotnet-channel: LTS
+
+      - name: Verify Installation
+        shell: pwsh
+        run: |
+          $version = dotnet --version
+          Write-Host "Installed LTS Version: $version"
+          
+          # Known LTS majors (update this list as needed for verification stability)
+          $ltsMajors = @(6, 8, 10, 12) 
+          $major = [int]$version.Split('.')[0]
+          
+          if ($ltsMajors -notcontains $major) {
+             Write-Warning "Installed version $major is not in the hardcoded known LTS list $(($ltsMajors -join ', ')). This might be a new LTS."
+          }
+
+          if ($version -match "preview") {
+            Write-Error "Expected stable LTS but got preview: $version"
+            exit 1
+          }
+
+  # 3. Latest STS: 'latest' + 'STS' -> Highest STS Stable
+  test-setup-latest-sts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Clear Toolcache
+        shell: pwsh
+        run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
+
+      - name: Setup Dotnet (Latest STS)
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: latest
+          dotnet-channel: STS
+
+      - name: Verify Installation
+        shell: pwsh
+        run: |
+          $version = dotnet --version
+          Write-Host "Installed STS Version: $version"
+          
+          # STS is typically odd numbers (9, 11) or evevn non-LTS.
+          # Just ensure it installed successfully and is stable.
+          if ($version -match "preview") {
+            Write-Error "Expected stable STS but got preview: $version"
+            exit 1
+          }
+
+  # 4. Latest Preview: 'latest' + 'preview' -> Highest Available (Inc. Previews)
+  test-setup-latest-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Clear Toolcache
+        shell: pwsh
+        run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
+
+      - name: Setup Dotnet (Latest Preview)
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: latest
+          dotnet-quality: preview
+
+      - name: Verify Installation
+        shell: pwsh
+        run: |
+          $version = dotnet --version
+          Write-Host "Installed Preview Version: $version"
+          # We can't strictly assert it *must* be preview (if GA just released, latest might be stable)
+          # But typically "preview" quality allows previews.
+          Write-Host "Successfully installed $version with preview quality enabled."
+
+  # 5. Combined: 'latest' + 'STS' + 'preview' -> Latest STS Preview
+  test-setup-latest-sts-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Clear Toolcache
+        shell: pwsh
+        run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
+
+      - name: Setup Dotnet (Latest STS Preview)
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: latest
+          dotnet-channel: STS
+          dotnet-quality: preview
+
+      - name: Verify Installation
+        shell: pwsh
+        run: |
+          $version = dotnet --version
+          Write-Host "Installed STS Preview Version: $version"
+
+  # 6. Conflict/Warning: Explicit version + channel -> Channel Ignored
+  test-setup-conflict-ignored:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Clear Toolcache
+        shell: pwsh
+        run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
+
+      - name: Setup Dotnet (Explicit Version with Channel)
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: '8.0.x'
+          # Should be ignored, so we get 8.0 (LTS) not some STS
+          dotnet-channel: STS
+      
+      - name: Verify Installation
+        shell: pwsh
+        run: |
+          $version = dotnet --version
+          Write-Host "Installed Version: $version"
+          
+          if (-not ($version.StartsWith("8.0"))) {
+            Write-Error "Expected version 8.0.x but got $version. Channel input might have overridden version!"
+            exit 1
+          }
+          Write-Host "Correctly ignored channel input for explicit version."
