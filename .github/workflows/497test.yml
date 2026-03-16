@@ -11,9 +11,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         
-      - name: Clear Toolcache
-        shell: pwsh
-        run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
+      # - name: Clear Toolcache
+      #   shell: pwsh
+      #   run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
 
       - name: Setup Dotnet (Latest Stable)
         uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
