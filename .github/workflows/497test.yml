@@ -43,9 +43,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       
-      - name: Clear Toolcache
-        shell: pwsh
-        run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
+      # - name: Clear Toolcache
+      #   shell: pwsh
+      #   run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
 
       - name: Setup Dotnet (Latest LTS)
         uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
@@ -79,9 +79,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       
-      - name: Clear Toolcache
-        shell: pwsh
-        run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
+      # - name: Clear Toolcache
+      #   shell: pwsh
+      #   run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
 
       - name: Setup Dotnet (Latest STS)
         uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
@@ -109,9 +109,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       
-      - name: Clear Toolcache
-        shell: pwsh
-        run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
+      # - name: Clear Toolcache
+      #   shell: pwsh
+      #   run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
 
       - name: Setup Dotnet (Latest Preview)
         uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
@@ -135,9 +135,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       
-      - name: Clear Toolcache
-        shell: pwsh
-        run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
+      # - name: Clear Toolcache
+      #   shell: pwsh
+      #   run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
 
       - name: Setup Dotnet (Latest STS Preview)
         uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
@@ -159,9 +159,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       
-      - name: Clear Toolcache
-        shell: pwsh
-        run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
+      # - name: Clear Toolcache
+      #   shell: pwsh
+      #   run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
 
       - name: Setup Dotnet (Explicit Version with Channel)
         uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
