@@ -35,7 +35,6 @@ jobs:
             Write-Error "Expected version >= 8.0 but got $version"
             exit 1
           }
-
   # 2. Latest LTS: 'latest' + 'LTS' -> Highest LTS Stable
   test-setup-latest-lts:
     runs-on: ubuntu-latest
@@ -66,12 +65,10 @@ jobs:
           if ($ltsMajors -notcontains $major) {
              Write-Warning "Installed version $major is not in the hardcoded known LTS list $(($ltsMajors -join ', ')). This might be a new LTS."
           }
-
           if ($version -match "preview") {
             Write-Error "Expected stable LTS but got preview: $version"
             exit 1
           }
-
   # 3. Latest STS: 'latest' + 'STS' -> Highest STS Stable
   test-setup-latest-sts:
     runs-on: ubuntu-latest
@@ -101,7 +98,6 @@ jobs:
             Write-Error "Expected stable STS but got preview: $version"
             exit 1
           }
-
   # 4. Latest Preview: 'latest' + 'preview' -> Highest Available (Inc. Previews)
   test-setup-latest-preview:
     runs-on: ubuntu-latest
@@ -127,7 +123,6 @@ jobs:
           # We can't strictly assert it *must* be preview (if GA just released, latest might be stable)
           # But typically "preview" quality allows previews.
           Write-Host "Successfully installed $version with preview quality enabled."
-
   # 5. Combined: 'latest' + 'STS' + 'preview' -> Latest STS Preview
   test-setup-latest-sts-preview:
     runs-on: ubuntu-latest
@@ -151,7 +146,6 @@ jobs:
         run: |
           $version = dotnet --version
           Write-Host "Installed STS Preview Version: $version"
-
   # 6. Conflict/Warning: Explicit version + channel -> Channel Ignored
   test-setup-conflict-ignored:
     runs-on: ubuntu-latest
@@ -164,6 +158,7 @@ jobs:
       #   run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
 
       - name: Setup Dotnet (Explicit Version with Channel)
+        id: setup-dotnet
         uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
         with:
           dotnet-version: '8.0.x'
@@ -173,11 +168,23 @@ jobs:
       - name: Verify Installation
         shell: pwsh
         run: |
-          $version = dotnet --version
-          Write-Host "Installed Version: $version"
+          # dotnet --version returns the HIGHEST SDK on the runner (e.g. pre-installed 10.0.x),
+          # not necessarily the one installed by the action. Use dotnet --list-sdks instead.
+          $sdks = dotnet --list-sdks
+          Write-Host "Installed SDKs:`n$sdks"
           
-          if (-not ($version.StartsWith("8.0"))) {
-            Write-Error "Expected version 8.0.x but got $version. Channel input might have overridden version!"
+          $has8 = $sdks -match "^8\.0\."
+          if (-not $has8) {
+            Write-Error "Expected an 8.0.x SDK to be installed but it was not found in the SDK list!"
             exit 1
           }
-          Write-Host "Correctly ignored channel input for explicit version."
+          
+          # Also verify the action output
+          $actionOutput = "${{ steps.setup-dotnet.outputs.dotnet-version }}"
+          Write-Host "Action output dotnet-version: $actionOutput"
+          if ($actionOutput -and -not $actionOutput.StartsWith("8.0")) {
+            Write-Error "Expected action output to be 8.0.x but got $actionOutput"
+            exit 1
+          }
+          
+          Write-Host "Correctly ignored channel input for explicit version. 8.0.x SDK is installed."
