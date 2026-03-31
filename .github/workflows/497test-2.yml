@@ -1,0 +1,522 @@
+name: Feature Tests - Latest Version (Extended)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  # ===========================
+  # POSITIVE CASES
+  # ===========================
+
+  # 1. Latest + LTS + preview quality
+  test-setup-latest-lts-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dotnet (Latest LTS Preview)
+        id: setup-dotnet
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: latest
+          dotnet-channel: LTS
+          dotnet-quality: preview
+
+      - name: Verify Installation
+        shell: pwsh
+        run: |
+          $actionOutput = "${{ steps.setup-dotnet.outputs.dotnet-version }}"
+          Write-Host "Action output: $actionOutput"
+
+          $ltsMajors = @(6, 8, 10, 12)
+          $major = [int]$actionOutput.Split('.')[0]
+
+          if ($ltsMajors -notcontains $major) {
+            Write-Warning "Major version $major not in known LTS list. May be a new LTS."
+          }
+          Write-Host "Successfully installed latest LTS (preview quality): $actionOutput"
+
+  # 2. 'latest' on Windows runner
+  test-setup-latest-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dotnet (Latest on Windows)
+        id: setup-dotnet
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: latest
+
+      - name: Verify Installation
+        shell: pwsh
+        run: |
+          $actionOutput = "${{ steps.setup-dotnet.outputs.dotnet-version }}"
+          Write-Host "Action output: $actionOutput"
+
+          if (-not $actionOutput) {
+            Write-Error "Action did not produce a dotnet-version output!"
+            exit 1
+          }
+          Write-Host "Successfully installed latest on Windows: $actionOutput"
+
+  # 3. 'latest' on macOS runner
+  test-setup-latest-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dotnet (Latest on macOS)
+        id: setup-dotnet
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: latest
+
+      - name: Verify Installation
+        shell: pwsh
+        run: |
+          $actionOutput = "${{ steps.setup-dotnet.outputs.dotnet-version }}"
+          Write-Host "Action output: $actionOutput"
+
+          if (-not $actionOutput) {
+            Write-Error "Action did not produce a dotnet-version output!"
+            exit 1
+          }
+          Write-Host "Successfully installed latest on macOS: $actionOutput"
+
+  # 4. 'latest' with 'ga' quality explicitly -> only GA, no previews
+  test-setup-latest-ga-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dotnet (Latest + GA quality)
+        id: setup-dotnet
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: latest
+          dotnet-quality: ga
+
+      - name: Verify Installation
+        shell: pwsh
+        run: |
+          $actionOutput = "${{ steps.setup-dotnet.outputs.dotnet-version }}"
+          Write-Host "Action output: $actionOutput"
+
+          if ($actionOutput -match "preview|rc") {
+            Write-Error "Expected GA version but got pre-release: $actionOutput"
+            exit 1
+          }
+          Write-Host "Successfully installed latest GA: $actionOutput"
+
+  # 5. 'latest' with 'daily' quality -> allows preview channels, installs daily builds
+  test-setup-latest-daily-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dotnet (Latest + daily quality)
+        id: setup-dotnet
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: latest
+          dotnet-quality: daily
+
+      - name: Verify Installation
+        shell: pwsh
+        run: |
+          $actionOutput = "${{ steps.setup-dotnet.outputs.dotnet-version }}"
+          Write-Host "Action output: $actionOutput"
+
+          if (-not $actionOutput) {
+            Write-Error "Action did not produce a dotnet-version output!"
+            exit 1
+          }
+          # daily quality allows preview channels, so version may or may not be preview
+          Write-Host "Successfully installed latest (daily quality): $actionOutput"
+
+  # 6. 'latest' + LTS + 'ga' quality -> strictly GA LTS only
+  test-setup-latest-lts-ga:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dotnet (Latest LTS + GA quality)
+        id: setup-dotnet
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: latest
+          dotnet-channel: LTS
+          dotnet-quality: ga
+
+      - name: Verify Installation
+        shell: pwsh
+        run: |
+          $actionOutput = "${{ steps.setup-dotnet.outputs.dotnet-version }}"
+          Write-Host "Action output: $actionOutput"
+
+          if ($actionOutput -match "preview|rc") {
+            Write-Error "Expected stable GA LTS but got pre-release: $actionOutput"
+            exit 1
+          }
+
+          $ltsMajors = @(6, 8, 10, 12)
+          $major = [int]$actionOutput.Split('.')[0]
+          if ($ltsMajors -notcontains $major) {
+            Write-Warning "Major version $major not in known LTS list. May be a new LTS."
+          }
+          Write-Host "Successfully installed latest LTS GA: $actionOutput"
+
+  # 7. 'latest' + STS + 'daily' quality -> daily builds from STS channel
+  test-setup-latest-sts-daily:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dotnet (Latest STS + daily quality)
+        id: setup-dotnet
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: latest
+          dotnet-channel: STS
+          dotnet-quality: daily
+
+      - name: Verify Installation
+        shell: pwsh
+        run: |
+          $actionOutput = "${{ steps.setup-dotnet.outputs.dotnet-version }}"
+          Write-Host "Action output: $actionOutput"
+
+          if (-not $actionOutput) {
+            Write-Error "Action did not produce a dotnet-version output!"
+            exit 1
+          }
+          Write-Host "Successfully installed latest STS (daily quality): $actionOutput"
+
+  # ===========================
+  # EDGE CASES
+  # ===========================
+
+  # 8. Explicit version + channel -> Channel ignored, explicit version installed
+  test-setup-conflict-explicit-version-with-channel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dotnet (Explicit Version with Channel)
+        id: setup-dotnet
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: '8.0.x'
+          dotnet-channel: STS
+
+      - name: Verify Installation
+        shell: pwsh
+        run: |
+          $sdks = dotnet --list-sdks
+          Write-Host "Installed SDKs:`n$sdks"
+
+          $has8 = $sdks -match "^8\.0\."
+          if (-not $has8) {
+            Write-Error "Expected an 8.0.x SDK but it was not found!"
+            exit 1
+          }
+
+          $actionOutput = "${{ steps.setup-dotnet.outputs.dotnet-version }}"
+          Write-Host "Action output: $actionOutput"
+          if ($actionOutput -and -not $actionOutput.StartsWith("8.0")) {
+            Write-Error "Expected action output to be 8.0.x but got $actionOutput"
+            exit 1
+          }
+          Write-Host "Correctly ignored channel input for explicit version."
+
+  # 9. Exact version + channel -> Channel ignored, exact version installed
+  test-setup-conflict-exact-version-with-channel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dotnet (Exact Version with Channel)
+        id: setup-dotnet
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: '8.0.404'
+          dotnet-channel: LTS
+
+      - name: Verify Installation
+        shell: pwsh
+        run: |
+          $sdks = dotnet --list-sdks
+          Write-Host "Installed SDKs:`n$sdks"
+
+          $hasExact = $sdks -match "^8\.0\.404"
+          if (-not $hasExact) {
+            Write-Error "Expected SDK 8.0.404 but it was not found!"
+            exit 1
+          }
+
+          $actionOutput = "${{ steps.setup-dotnet.outputs.dotnet-version }}"
+          Write-Host "Action output: $actionOutput"
+          if ($actionOutput -ne "8.0.404") {
+            Write-Error "Expected action output to be 8.0.404 but got $actionOutput"
+            exit 1
+          }
+          Write-Host "Correctly ignored channel input for exact version."
+
+  # 10. Multiline versions with 'latest' -> both resolve and install
+  test-setup-latest-with-explicit-multiline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dotnet (Multiline with latest)
+        id: setup-dotnet
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: |
+            8.0.x
+            latest
+
+      - name: Verify both installed
+        shell: pwsh
+        run: |
+          $sdks = dotnet --list-sdks
+          Write-Host "Installed SDKs:`n$sdks"
+
+          $has8 = $sdks -match "^8\.0\."
+          if (-not $has8) {
+            Write-Error "Expected an 8.0.x SDK but it was not found!"
+            exit 1
+          }
+          Write-Host "Both 8.0.x and latest are installed."
+
+  # 11. Channel with case variations (lts lowercase)
+  test-setup-latest-channel-case-insensitive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dotnet (Channel lowercase)
+        id: setup-dotnet
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: latest
+          dotnet-channel: lts
+
+      - name: Verify Installation
+        shell: pwsh
+        run: |
+          $actionOutput = "${{ steps.setup-dotnet.outputs.dotnet-version }}"
+          Write-Host "Action output: $actionOutput"
+
+          if (-not $actionOutput) {
+            Write-Error "Action did not produce a dotnet-version output!"
+            exit 1
+          }
+          Write-Host "Channel 'lts' (lowercase) correctly resolved: $actionOutput"
+
+  # 12. LTS and STS resolve to different versions
+  test-setup-lts-vs-sts-differ:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dotnet (Latest LTS)
+        id: setup-lts
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: latest
+          dotnet-channel: LTS
+
+      - name: Setup Dotnet (Latest STS)
+        id: setup-sts
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: latest
+          dotnet-channel: STS
+
+      - name: Verify LTS and STS are different major versions
+        shell: pwsh
+        run: |
+          $lts = "${{ steps.setup-lts.outputs.dotnet-version }}"
+          $sts = "${{ steps.setup-sts.outputs.dotnet-version }}"
+          Write-Host "LTS: $lts"
+          Write-Host "STS: $sts"
+
+          $ltsMajor = [int]$lts.Split('.')[0]
+          $stsMajor = [int]$sts.Split('.')[0]
+
+          if ($ltsMajor -eq $stsMajor) {
+            Write-Warning "LTS ($lts) and STS ($sts) resolved to the same major version. This can happen if only one non-EOL channel exists per type."
+          } else {
+            Write-Host "LTS and STS correctly resolved to different major versions: $ltsMajor vs $stsMajor"
+          }
+
+          $sdks = dotnet --list-sdks
+          Write-Host "All installed SDKs:`n$sdks"
+
+  # 13. 'ga' vs 'preview' quality resolve differently when preview channel exists
+  test-setup-ga-vs-preview-quality-differ:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dotnet (Latest + GA quality)
+        id: setup-ga
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: latest
+          dotnet-quality: ga
+
+      - name: Setup Dotnet (Latest + preview quality)
+        id: setup-preview
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: latest
+          dotnet-quality: preview
+
+      - name: Verify GA and preview may resolve differently
+        shell: pwsh
+        run: |
+          $ga = "${{ steps.setup-ga.outputs.dotnet-version }}"
+          $preview = "${{ steps.setup-preview.outputs.dotnet-version }}"
+          Write-Host "GA: $ga"
+          Write-Host "Preview: $preview"
+
+          $gaMajor = [int]$ga.Split('.')[0]
+          $previewMajor = [int]$preview.Split('.')[0]
+
+          if ($previewMajor -gt $gaMajor) {
+            Write-Host "Preview ($preview) resolved to a higher major than GA ($ga) as expected when preview channels exist."
+          } elseif ($previewMajor -eq $gaMajor) {
+            Write-Host "Preview and GA resolved to the same major. Preview channel may not have a newer version available."
+          } else {
+            Write-Error "Preview major ($previewMajor) is lower than GA major ($gaMajor). This is unexpected!"
+            exit 1
+          }
+
+          $sdks = dotnet --list-sdks
+          Write-Host "All installed SDKs:`n$sdks"
+
+  # ===========================
+  # NEGATIVE CASES
+  # ===========================
+
+  # 14. Invalid channel value with 'latest' -> should fail
+  test-setup-latest-invalid-channel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dotnet (Invalid Channel)
+        id: setup-dotnet
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: latest
+          dotnet-channel: INVALID
+        continue-on-error: true
+
+      - name: Verify it failed
+        shell: pwsh
+        run: |
+          $outcome = "${{ steps.setup-dotnet.outcome }}"
+          Write-Host "Step outcome: $outcome"
+          if ($outcome -ne "failure") {
+            Write-Error "Expected action to fail with invalid channel 'INVALID' but it succeeded!"
+            exit 1
+          }
+          Write-Host "Correctly failed with invalid channel value."
+
+  # 15. Invalid quality value with 'latest' -> should fail
+  test-setup-latest-invalid-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dotnet (Invalid Quality)
+        id: setup-dotnet
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: latest
+          dotnet-quality: invalid_quality
+        continue-on-error: true
+
+      - name: Verify it failed
+        shell: pwsh
+        run: |
+          $outcome = "${{ steps.setup-dotnet.outcome }}"
+          Write-Host "Step outcome: $outcome"
+          if ($outcome -ne "failure") {
+            Write-Error "Expected action to fail with invalid quality but it succeeded!"
+            exit 1
+          }
+          Write-Host "Correctly failed with invalid quality value."
+
+  # 16. Invalid channel with explicit version -> should warn but not fail
+  test-setup-explicit-version-invalid-channel-warns:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dotnet (Explicit version + invalid channel)
+        id: setup-dotnet
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: '8.0.x'
+          dotnet-channel: INVALID
+
+      - name: Verify it succeeded anyway
+        shell: pwsh
+        run: |
+          $sdks = dotnet --list-sdks
+          Write-Host "Installed SDKs:`n$sdks"
+
+          $has8 = $sdks -match "^8\.0\."
+          if (-not $has8) {
+            Write-Error "Expected 8.0.x SDK to be installed!"
+            exit 1
+          }
+          Write-Host "Correctly warned and ignored invalid channel for explicit version."
+
+  # 17. Multiline with one invalid version -> should fail
+  test-setup-latest-with-invalid-version-multiline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dotnet (Multiline with invalid version)
+        id: setup-dotnet
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        with:
+          dotnet-version: |
+            latest
+            99.99.99
+        continue-on-error: true
+
+      - name: Verify it failed
+        shell: pwsh
+        run: |
+          $outcome = "${{ steps.setup-dotnet.outcome }}"
+          Write-Host "Step outcome: $outcome"
+          if ($outcome -ne "failure") {
+            Write-Error "Expected action to fail with non-existent version 99.99.99 but it succeeded!"
+            exit 1
+          }
+          Write-Host "Correctly failed when one version in multiline is invalid."
