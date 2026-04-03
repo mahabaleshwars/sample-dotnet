@@ -2,14 +2,10 @@ name: Test dotnet-channel Implementation
 
 on:
   workflow_dispatch:
-  push:
-    branches: [feature/497-dotnet-version-latest-keyword]
 
 jobs:
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # GROUP 1: dotnet-version: latest — channel resolved via releases-index API
-  # ─────────────────────────────────────────────────────────────────────────────
+  # ─── GROUP 1: latest — resolved via releases-index API ───────────────────────
 
   latest-no-channel:
     name: "latest | no channel → highest stable GA"
@@ -20,10 +16,9 @@ jobs:
         id: setup
         with:
           dotnet-version: latest
-      - name: Verify installed version is set
-        run: |
+      - run: |
           echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
-          dotnet --version
+          dotnet --list-sdks
 
   latest-channel-lts:
     name: "latest | dotnet-channel: LTS → latest LTS via API"
@@ -35,10 +30,9 @@ jobs:
         with:
           dotnet-version: latest
           dotnet-channel: LTS
-      - name: Verify LTS version installed
-        run: |
+      - run: |
           echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
-          dotnet --version
+          dotnet --list-sdks | grep -E "^${{ steps.setup.outputs.dotnet-version }}"
 
   latest-channel-sts:
     name: "latest | dotnet-channel: STS → latest STS via API"
@@ -50,14 +44,11 @@ jobs:
         with:
           dotnet-version: latest
           dotnet-channel: STS
-      - name: Verify STS version installed
-        run: |
+      - run: |
           echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
-          dotnet --version
+          dotnet --list-sdks | grep -E "^${{ steps.setup.outputs.dotnet-version }}"
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # GROUP 2: dotnet-version: latest — A.B channel (passed directly to script)
-  # ─────────────────────────────────────────────────────────────────────────────
+  # ─── GROUP 2: latest + A.B channel (passed directly to script) ───────────────
 
   latest-channel-ab-8:
     name: "latest | dotnet-channel: 8.0 → passed directly to install script"
@@ -69,10 +60,9 @@ jobs:
         with:
           dotnet-version: latest
           dotnet-channel: '8.0'
-      - name: Verify 8.0.x is installed
-        run: |
+      - run: |
           echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
-          dotnet --version | grep -E '^8\.'
+          dotnet --list-sdks | grep -E '^8\.'
 
   latest-channel-ab-9:
     name: "latest | dotnet-channel: 9.0 → passed directly to install script"
@@ -84,15 +74,11 @@ jobs:
         with:
           dotnet-version: latest
           dotnet-channel: '9.0'
-      - name: Verify 9.0.x is installed
-        run: |
+      - run: |
           echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
-          dotnet --version | grep -E '^9\.'
+          dotnet --list-sdks | grep -E '^9\.'
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # GROUP 3: dotnet-version: latest — A.B.Cxx channel (passed directly to script)
-  # Available since .NET 5.0 (major >= 5 required)
-  # ─────────────────────────────────────────────────────────────────────────────
+  # ─── GROUP 3: latest + A.B.Cxx channel (passed directly to script) ───────────
 
   latest-channel-abcxx-801xx:
     name: "latest | dotnet-channel: 8.0.1xx → passed directly to install script"
@@ -104,10 +90,9 @@ jobs:
         with:
           dotnet-version: latest
           dotnet-channel: '8.0.1xx'
-      - name: Verify 8.0.1xx band installed
-        run: |
+      - run: |
           echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
-          dotnet --version | grep -E '^8\.0\.1'
+          dotnet --list-sdks | grep -E '^8\.0\.1'
 
   latest-channel-abcxx-802xx:
     name: "latest | dotnet-channel: 8.0.2xx → passed directly to install script"
@@ -119,12 +104,11 @@ jobs:
         with:
           dotnet-version: latest
           dotnet-channel: '8.0.2xx'
-      - name: Verify 8.0.2xx band installed
-        run: |
+      - run: |
           echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
-          dotnet --version | grep -E '^8\.0\.2'
+          dotnet --list-sdks | grep -E '^8\.0\.2'
 
-  latest-channel-abcxx-9010x:
+  latest-channel-abcxx-901xx:
     name: "latest | dotnet-channel: 9.0.1xx"
     runs-on: ubuntu-latest
     steps:
@@ -134,17 +118,14 @@ jobs:
         with:
           dotnet-version: latest
           dotnet-channel: '9.0.1xx'
-      - name: Verify 9.0.1xx band installed
-        run: |
+      - run: |
           echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
-          dotnet --version | grep -E '^9\.0\.1'
+          dotnet --list-sdks | grep -E '^9\.0\.1'
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # GROUP 4: dotnet-version: latest — combined with dotnet-quality
-  # ─────────────────────────────────────────────────────────────────────────────
+  # ─── GROUP 4: latest + dotnet-quality ────────────────────────────────────────
 
   latest-quality-ga:
-    name: "latest | quality: ga → stable only (same as no quality)"
+    name: "latest | quality: ga → stable only"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -153,8 +134,9 @@ jobs:
         with:
           dotnet-version: latest
           dotnet-quality: ga
-      - name: Verify installed
-        run: dotnet --version
+      - run: |
+          echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --list-sdks | grep -E "^${{ steps.setup.outputs.dotnet-version }}"
 
   latest-quality-preview:
     name: "latest | quality: preview → includes previews in API filter"
@@ -166,8 +148,9 @@ jobs:
         with:
           dotnet-version: latest
           dotnet-quality: preview
-      - name: Verify installed
-        run: dotnet --version
+      - run: |
+          echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --list-sdks
 
   latest-lts-quality-ga:
     name: "latest | channel: LTS + quality: ga"
@@ -180,8 +163,9 @@ jobs:
           dotnet-version: latest
           dotnet-channel: LTS
           dotnet-quality: ga
-      - name: Verify installed
-        run: dotnet --version
+      - run: |
+          echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --list-sdks | grep -E "^${{ steps.setup.outputs.dotnet-version }}"
 
   latest-sts-quality-preview:
     name: "latest | channel: STS + quality: preview"
@@ -194,11 +178,12 @@ jobs:
           dotnet-version: latest
           dotnet-channel: STS
           dotnet-quality: preview
-      - name: Verify installed
-        run: dotnet --version
+      - run: |
+          echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --list-sdks
 
   latest-ab-quality-ga:
-    name: "latest | channel: 8.0 + quality: ga → direct script pass-through with quality"
+    name: "latest | channel: 8.0 + quality: ga"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -208,11 +193,12 @@ jobs:
           dotnet-version: latest
           dotnet-channel: '8.0'
           dotnet-quality: ga
-      - name: Verify 8.0 installed
-        run: dotnet --version | grep -E '^8\.'
+      - run: |
+          echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --list-sdks | grep -E '^8\.'
 
   latest-abcxx-quality-ga:
-    name: "latest | channel: 8.0.1xx + quality: ga → direct script pass-through with quality"
+    name: "latest | channel: 8.0.1xx + quality: ga"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -222,12 +208,11 @@ jobs:
           dotnet-version: latest
           dotnet-channel: '8.0.1xx'
           dotnet-quality: ga
-      - name: Verify 8.0.1xx installed
-        run: dotnet --version | grep -E '^8\.0\.1'
+      - run: |
+          echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --list-sdks | grep -E '^8\.0\.1'
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # GROUP 5: dotnet-version: latest — case-insensitivity checks
-  # ─────────────────────────────────────────────────────────────────────────────
+  # ─── GROUP 5: Case-insensitivity ─────────────────────────────────────────────
 
   latest-uppercase:
     name: "LATEST (uppercase) → same as latest"
@@ -238,8 +223,9 @@ jobs:
         id: setup
         with:
           dotnet-version: LATEST
-      - name: Verify installed
-        run: dotnet --version
+      - run: |
+          echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --list-sdks
 
   latest-lts-lowercase:
     name: "latest | channel: lts (lowercase) → same as LTS"
@@ -251,13 +237,11 @@ jobs:
         with:
           dotnet-version: latest
           dotnet-channel: lts
-      - name: Verify installed
-        run: dotnet --version
+      - run: |
+          echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --list-sdks | grep -E "^${{ steps.setup.outputs.dotnet-version }}"
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # GROUP 6: Warning cases — valid channel with a non-latest version
-  # Action should warn but NOT fail; channel is silently ignored
-  # ─────────────────────────────────────────────────────────────────────────────
+  # ─── GROUP 6: Warning cases — valid channel with non-latest version ───────────
 
   channel-lts-ignored-with-specific-version:
     name: "channel: LTS + version: 8.0.x → warning, LTS ignored, 8.0.x installed"
@@ -269,8 +253,9 @@ jobs:
         with:
           dotnet-version: '8.0.x'
           dotnet-channel: LTS
-      - name: Verify 8.0 installed despite channel
-        run: dotnet --version | grep -E '^8\.'
+      - run: |
+          echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --list-sdks | grep -E '^8\.'
 
   channel-ab-ignored-with-specific-version:
     name: "channel: 9.0 + version: 8.0.x → warning, channel ignored, 8.0.x installed"
@@ -282,8 +267,9 @@ jobs:
         with:
           dotnet-version: '8.0.x'
           dotnet-channel: '9.0'
-      - name: Verify 8.0 installed (channel ignored with warning)
-        run: dotnet --version | grep -E '^8\.'
+      - run: |
+          echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --list-sdks | grep -E '^8\.'
 
   channel-abcxx-ignored-with-specific-version:
     name: "channel: 9.0.1xx + version: 8.0.x → warning, channel ignored"
@@ -295,13 +281,11 @@ jobs:
         with:
           dotnet-version: '8.0.x'
           dotnet-channel: '9.0.1xx'
-      - name: Verify 8.0 installed (channel ignored with warning)
-        run: dotnet --version | grep -E '^8\.'
+      - run: |
+          echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --list-sdks | grep -E '^8\.'
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # GROUP 7: Error cases — invalid channel values
-  # These jobs are expected to fail; continue-on-error lets the workflow finish
-  # ─────────────────────────────────────────────────────────────────────────────
+  # ─── GROUP 7: Error cases ────────────────────────────────────────────────────
 
   invalid-channel-with-latest-fails:
     name: "EXPECTED FAILURE: invalid channel with latest → action fails"
@@ -310,12 +294,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
-        id: setup
         with:
           dotnet-version: latest
           dotnet-channel: 'bogus-channel'
       - name: Should not reach here
-        run: echo "ERROR - this step should not run"
+        run: exit 1
 
   invalid-abcxx-major-below-5-fails:
     name: "EXPECTED FAILURE: channel: 3.1.1xx (major < 5) with latest → action fails"
@@ -324,12 +307,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
-        id: setup
         with:
           dotnet-version: latest
           dotnet-channel: '3.1.1xx'
       - name: Should not reach here
-        run: echo "ERROR - this step should not run"
+        run: exit 1
 
   invalid-channel-with-specific-version-warns:
     name: "invalid channel with non-latest version → warning only, install proceeds"
@@ -341,13 +323,11 @@ jobs:
         with:
           dotnet-version: '8.0.x'
           dotnet-channel: 'bogus-channel'
-      - name: Verify 8.0 installed (invalid channel ignored with warning)
-        run: dotnet --version | grep -E '^8\.'
+      - run: |
+          echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --list-sdks | grep -E '^8\.'
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # GROUP 8: Specific dotnet-version formats (no channel)
-  # Tests the DotnetVersionResolver paths unrelated to channel
-  # ─────────────────────────────────────────────────────────────────────────────
+  # ─── GROUP 8: Specific dotnet-version formats ────────────────────────────────
 
   version-exact:
     name: "dotnet-version: exact A.B.C"
@@ -358,7 +338,9 @@ jobs:
         id: setup
         with:
           dotnet-version: '8.0.408'
-      - run: dotnet --version | grep -E '^8\.0\.408$'
+      - run: |
+          echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --list-sdks | grep -E '^8\.0\.408 '
 
   version-ab-channel:
     name: "dotnet-version: A.B → latest patch in channel"
@@ -369,7 +351,9 @@ jobs:
         id: setup
         with:
           dotnet-version: '8.0'
-      - run: dotnet --version | grep -E '^8\.'
+      - run: |
+          echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --list-sdks | grep -E '^8\.'
 
   version-ab-wildcard:
     name: "dotnet-version: A.B.x → latest patch in channel"
@@ -380,7 +364,9 @@ jobs:
         id: setup
         with:
           dotnet-version: '8.0.x'
-      - run: dotnet --version | grep -E '^8\.'
+      - run: |
+          echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --list-sdks | grep -E '^8\.'
 
   version-major-only:
     name: "dotnet-version: A.x → latest minor of major"
@@ -391,7 +377,9 @@ jobs:
         id: setup
         with:
           dotnet-version: '8.x'
-      - run: dotnet --version | grep -E '^8\.'
+      - run: |
+          echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --list-sdks | grep -E '^8\.'
 
   version-abcxx:
     name: "dotnet-version: A.B.Cxx → SDK band"
@@ -402,7 +390,9 @@ jobs:
         id: setup
         with:
           dotnet-version: '8.0.4xx'
-      - run: dotnet --version | grep -E '^8\.0\.4'
+      - run: |
+          echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --list-sdks | grep -E '^8\.0\.4'
 
   version-abcxx-with-quality:
     name: "dotnet-version: 8.0.x + quality: preview"
@@ -414,11 +404,11 @@ jobs:
         with:
           dotnet-version: '8.0.x'
           dotnet-quality: preview
-      - run: dotnet --version | grep -E '^8\.'
+      - run: |
+          echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --list-sdks | grep -E '^8\.'
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # GROUP 9: Multiple versions
-  # ─────────────────────────────────────────────────────────────────────────────
+  # ─── GROUP 9: Multiple versions ──────────────────────────────────────────────
 
   multiple-versions:
     name: "Multiple dotnet-version values installed"
@@ -426,18 +416,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
-        id: setup
         with:
           dotnet-version: |
             8.0.x
             9.0.x
-      - name: Verify both SDKs are installed
-        run: |
+      - run: |
           dotnet --list-sdks | grep -E '^8\.'
           dotnet --list-sdks | grep -E '^9\.'
 
   multiple-versions-with-latest:
-    name: "Mix of specific version and latest"
+    name: "Mix of specific version and latest (channel: LTS only for latest)"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -448,14 +436,11 @@ jobs:
             8.0.x
             latest
           dotnet-channel: LTS
-      - name: Verify both installed, channel applied only to latest
-        run: |
+      - run: |
           dotnet --list-sdks | grep -E '^8\.'
           dotnet --list-sdks
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # GROUP 10: Cross-platform matrix
-  # ─────────────────────────────────────────────────────────────────────────────
+  # ─── GROUP 10: Cross-platform matrix ─────────────────────────────────────────
 
   cross-platform:
     name: "latest | channel: ${{ matrix.channel }} on ${{ matrix.os }}"
@@ -473,5 +458,7 @@ jobs:
           dotnet-version: latest
           dotnet-channel: ${{ matrix.channel }}
       - name: Verify installed
-        run: dotnet --version
         shell: bash
+        run: |
+          echo "Installed: ${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --list-sdks
