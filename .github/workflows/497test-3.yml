@@ -34,7 +34,7 @@ jobs:
         run: ./dotnet-install.sh --channel LTS --quality preview --dry-run
 
       - name: Test --version latest --channel 8.0.1xx --quality ga
-        run: /dotnet-install.sh --version latest --channel 8.0.1xx --quality ga --dry-run
+        run: ./dotnet-install.sh --version latest --channel 8.0.1xx --quality ga --dry-run
 
   # ── New: same combinations via setup-dotnet@v5 ────────────────────────────
   test-setup-dotnet:
