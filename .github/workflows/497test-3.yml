@@ -1,10 +1,12 @@
-name: Test dotnet-install script channels
+name: Test dotnet-channel inputs (setup-dotnet vs install-script)
 
 on:
   workflow_dispatch:
-  
+
 jobs:
+  # ── Original: raw install script with --dry-run ────────────────────────────
   test-install-script:
+    name: install-script
     runs-on: ubuntu-latest
     steps:
       - name: Download install script
@@ -30,3 +32,55 @@ jobs:
 
       - name: Test --channel LTS --quality preview
         run: ./dotnet-install.sh --channel LTS --quality preview --dry-run
+
+  # ── New: same combinations via setup-dotnet@v5 ────────────────────────────
+  test-setup-dotnet:
+    name: setup-dotnet
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test dotnet-version:latest dotnet-channel:LTS
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: latest
+          dotnet-channel: LTS
+      - run: dotnet --version
+
+      - name: Test dotnet-version:latest dotnet-channel:STS
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: latest
+          dotnet-channel: STS
+      - run: dotnet --version
+
+      - name: Test dotnet-version:8.0 (equivalent to --channel 8.0)
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0
+      - run: dotnet --version
+
+      - name: Test dotnet-version:8.0.1xx (equivalent to --channel 8.0.1xx)
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.1xx
+      - run: dotnet --version
+
+      - name: Test dotnet-version:latest (equivalent to --version latest)
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: latest
+      - run: dotnet --version
+
+      - name: Test dotnet-version:8.0 dotnet-quality:ga (equivalent to --channel 8.0 --quality ga)
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0
+          dotnet-quality: ga
+      - run: dotnet --version
+
+      - name: Test dotnet-version:latest dotnet-channel:LTS dotnet-quality:preview (equivalent to --channel LTS --quality preview)
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: latest
+          dotnet-channel: LTS
+          dotnet-quality: preview
+      - run: dotnet --version
