@@ -2,9 +2,6 @@ name: Test dotnet-install script channels
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - feature/497-dotnet-version-latest-keyword
 
 jobs:
   test-install-script:
