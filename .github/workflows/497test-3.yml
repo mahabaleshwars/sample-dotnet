@@ -2,49 +2,31 @@ name: Test dotnet-install script channels
 
 on:
   workflow_dispatch:
-
+  
 jobs:
   test-install-script:
-    name: ${{ matrix.os }} — ${{ matrix.label }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        include:
-          - label: "channel LTS"
-          - label: "channel STS"
-          - label: "channel 8.0"
-          - label: "channel 8.0.1xx"
-          - label: "version latest"
-
+    runs-on: ubuntu-latest
     steps:
-      - name: Test --channel LTS 
-        if: ${{ matrix.label == 'channel LTS' }}
-        shell: bash
-        run: |
-          curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel LTS --dry-run
+      - name: Download install script
+        run: curl -sSL https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh && chmod +x dotnet-install.sh
 
-      - name: Test --channel STS 
-        if: ${{ matrix.label == 'channel STS' }}
-        shell: bash
-        run: |
-          curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel STS --dry-run
+      - name: Test --channel LTS
+        run: ./dotnet-install.sh --channel LTS --dry-run
 
-      - name: Test --channel 8.0 
-        if: ${{ matrix.label == 'channel 8.0' }}
-        shell: bash
-        run: |
-          curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 8.0 --dry-run
+      - name: Test --channel STS
+        run: ./dotnet-install.sh --channel STS --dry-run
 
-      - name: Test --channel 8.0.1xx 
-        if: ${{ matrix.label == 'channel 8.0.1xx' }}
-        shell: bash
-        run: |
-          curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 8.0.1xx --dry-run
+      - name: Test --channel 8.0
+        run: ./dotnet-install.sh --channel 8.0 --dry-run
 
-      - name: Test --version latest 
-        if: ${{ matrix.label == 'version latest' }}
-        shell: bash
-        run: |
-          curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --version latest --dry-run
+      - name: Test --channel 8.0.1xx
+        run: ./dotnet-install.sh --channel 8.0.1xx --dry-run
+
+      - name: Test --version latest (defaults to LTS channel)
+        run: ./dotnet-install.sh --version latest --dry-run
+
+      - name: Test --channel 8.0 --quality ga
+        run: ./dotnet-install.sh --channel 8.0 --quality ga --dry-run
+
+      - name: Test --channel LTS --quality preview
+        run: ./dotnet-install.sh --channel LTS --quality preview --dry-run
