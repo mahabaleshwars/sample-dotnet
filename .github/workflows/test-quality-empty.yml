@@ -1,0 +1,105 @@
+name: Test dotnet-quality empty string behavior
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-quality-empty-v6:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        quality: ['', 'ga', 'preview']
+        dotnet-version: ['10', '10.0', '9.0']
+    steps:
+      - name: Log test parameters
+        shell: bash
+        run: |
+          echo "========================================="
+          echo "  TEST: actions/setup-dotnet@v6"
+          echo "========================================="
+          echo "OS:             ${{ matrix.os }}"
+          echo "dotnet-version: ${{ matrix.dotnet-version }}"
+          echo "dotnet-quality: '${{ matrix.quality }}'"
+          echo "quality empty?: ${{ matrix.quality == '' }}"
+          echo "========================================="
+
+      - name: Setup dotnet (v6) with quality='${{ matrix.quality }}'
+        id: setup
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ matrix.dotnet-version }}
+          dotnet-quality: ${{ matrix.quality }}
+        continue-on-error: true
+
+      - name: Log setup outcome
+        shell: bash
+        run: |
+          echo "========================================="
+          echo "  RESULT"
+          echo "========================================="
+          echo "Step outcome:       ${{ steps.setup.outcome }}"
+          echo "dotnet-version out: ${{ steps.setup.outputs.dotnet-version }}"
+          echo "========================================="
+
+      - name: Verify installed dotnet
+        if: steps.setup.outcome == 'success'
+        shell: pwsh
+        run: |
+          Write-Host "=========================================";
+          Write-Host "  VERIFICATION";
+          Write-Host "=========================================";
+          $version = dotnet --version;
+          Write-Host "dotnet --version: $version";
+          Write-Host "";
+          Write-Host "dotnet --list-sdks:";
+          dotnet --list-sdks;
+          Write-Host "";
+          Write-Host "dotnet --list-runtimes:";
+          dotnet --list-runtimes;
+          Write-Host "=========================================";
+
+      - name: Log failure details
+        if: steps.setup.outcome == 'failure'
+        shell: bash
+        run: |
+          echo "========================================="
+          echo "  SETUP FAILED"
+          echo "========================================="
+          echo "actions/setup-dotnet@v6 failed with:"
+          echo "  dotnet-version: ${{ matrix.dotnet-version }}"
+          echo "  dotnet-quality: '${{ matrix.quality }}'"
+          echo ""
+          echo "This may indicate the action does not"
+          echo "handle empty quality gracefully."
+          echo "========================================="
+
+  summary:
+    runs-on: ubuntu-latest
+    needs: test-quality-empty-v6
+    if: always()
+    steps:
+      - name: Test summary
+        shell: bash
+        run: |
+          echo "========================================="
+          echo "  TEST SUMMARY"
+          echo "========================================="
+          echo ""
+          echo "Purpose: Validate that actions/setup-dotnet@v6"
+          echo "handles dotnet-quality input correctly when:"
+          echo "  1. quality is '' (empty string)"
+          echo "  2. quality is 'ga'"
+          echo "  3. quality is 'preview'"
+          echo ""
+          echo "TypeScript context:"
+          echo "  The QualityOptions type was 'daily'|'preview'|'ga'"
+          echo "  but the default value passed is '' (empty string)."
+          echo "  The old code used 'as QualityOptions' cast to force"
+          echo "  '' into the type, bypassing type safety."
+          echo "  The fix: QualityOptions = 'daily'|'preview'|'ga'|''"
+          echo "  makes '' a first-class value without unsafe casts."
+          echo ""
+          echo "Overall result: ${{ needs.test-quality-empty-v6.result }}"
+          echo "========================================="
