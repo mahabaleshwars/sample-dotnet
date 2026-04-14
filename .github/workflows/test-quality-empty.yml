@@ -10,7 +10,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        quality: ['', 'ga', 'preview']
+        quality: ['']
         dotnet-version: ['10', '10.0', '9.0']
     steps:
       - name: Log test parameters
