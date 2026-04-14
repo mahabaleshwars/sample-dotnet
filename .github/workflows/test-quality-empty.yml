@@ -100,22 +100,15 @@ jobs:
           echo "  dotnet-version: ${{ matrix.dotnet-version }}"
           echo "  dotnet-quality: '${{ matrix.quality }}'"
           echo "========================================="
-
-  summary:
-    runs-on: ubuntu-latest
-    needs: test-quality-empty-curl
-    if: always()
+  test-major-version:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        dotnet-version: ['10', '9', '8']
     steps:
-      - name: Test summary
-        shell: bash
-        run: |
-          echo "========================================="
-          echo "  TEST SUMMARY"
-          echo "========================================="
-          echo ""
-          echo "Purpose: Validate empty string behavior"
-          echo "using direct curl commands to the native"
-          echo "dotnet-install scripts (.sh and .ps1)."
-          echo ""
-          echo "Overall result: ${{ needs.test-quality-empty-curl.result }}"
-          echo "========================================="
+      - name: Test Major version without minor version
+        uses: actions/setup-dotnet@v5
+        with:
+            dotnet-version: ${{ matrix.dotnet-version }}
