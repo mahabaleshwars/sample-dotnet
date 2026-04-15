@@ -16,7 +16,7 @@ jobs:
       #   run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
 
       - name: Setup Dotnet (Latest Stable)
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: latest
       
@@ -47,7 +47,7 @@ jobs:
       #   run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
 
       - name: Setup Dotnet (Latest LTS)
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: latest
           dotnet-channel: LTS
@@ -81,7 +81,7 @@ jobs:
       #   run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
 
       - name: Setup Dotnet (Latest STS)
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: latest
           dotnet-channel: STS
@@ -110,7 +110,7 @@ jobs:
       #   run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
 
       - name: Setup Dotnet (Latest Preview)
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: latest
           dotnet-quality: preview
@@ -135,7 +135,7 @@ jobs:
       #   run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
 
       - name: Setup Dotnet (Latest STS Preview)
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: latest
           dotnet-channel: STS
@@ -159,7 +159,7 @@ jobs:
 
       - name: Setup Dotnet (Explicit Version with Channel)
         id: setup-dotnet
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: '8.0.x'
           # Should be ignored, so we get 8.0 (LTS) not some STS
