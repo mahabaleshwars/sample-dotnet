@@ -17,7 +17,7 @@ jobs:
 
       - name: Setup Dotnet (Latest LTS Preview)
         id: setup-dotnet
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: latest
           dotnet-channel: LTS
@@ -46,7 +46,7 @@ jobs:
 
       - name: Setup Dotnet (Latest on Windows)
         id: setup-dotnet
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: latest
 
@@ -71,7 +71,7 @@ jobs:
 
       - name: Setup Dotnet (Latest on macOS)
         id: setup-dotnet
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: latest
 
@@ -96,7 +96,7 @@ jobs:
 
       - name: Setup Dotnet (Latest + GA quality)
         id: setup-dotnet
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: latest
           dotnet-quality: ga
@@ -122,7 +122,7 @@ jobs:
 
       - name: Setup Dotnet (Latest + daily quality)
         id: setup-dotnet
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: latest
           dotnet-quality: daily
@@ -149,7 +149,7 @@ jobs:
 
       - name: Setup Dotnet (Latest LTS + GA quality)
         id: setup-dotnet
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: latest
           dotnet-channel: LTS
@@ -182,7 +182,7 @@ jobs:
 
       - name: Setup Dotnet (Latest STS + daily quality)
         id: setup-dotnet
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: latest
           dotnet-channel: STS
@@ -213,7 +213,7 @@ jobs:
 
       - name: Setup Dotnet (Explicit Version with Channel)
         id: setup-dotnet
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: '8.0.x'
           dotnet-channel: STS
@@ -247,7 +247,7 @@ jobs:
 
       - name: Setup Dotnet (Exact Version with Channel)
         id: setup-dotnet
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: '8.0.404'
           dotnet-channel: LTS
@@ -281,7 +281,7 @@ jobs:
 
       - name: Setup Dotnet (Multiline with latest)
         id: setup-dotnet
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: |
             8.0.x
@@ -309,7 +309,7 @@ jobs:
 
       - name: Setup Dotnet (Channel lowercase)
         id: setup-dotnet
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: latest
           dotnet-channel: lts
@@ -335,14 +335,14 @@ jobs:
 
       - name: Setup Dotnet (Latest LTS)
         id: setup-lts
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: latest
           dotnet-channel: LTS
 
       - name: Setup Dotnet (Latest STS)
         id: setup-sts
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: latest
           dotnet-channel: STS
@@ -376,14 +376,14 @@ jobs:
 
       - name: Setup Dotnet (Latest + GA quality)
         id: setup-ga
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: latest
           dotnet-quality: ga
 
       - name: Setup Dotnet (Latest + preview quality)
         id: setup-preview
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: latest
           dotnet-quality: preview
@@ -424,7 +424,7 @@ jobs:
 
       - name: Setup Dotnet (Invalid Channel)
         id: setup-dotnet
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: latest
           dotnet-channel: INVALID
@@ -450,7 +450,7 @@ jobs:
 
       - name: Setup Dotnet (Invalid Quality)
         id: setup-dotnet
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: latest
           dotnet-quality: invalid_quality
@@ -476,7 +476,7 @@ jobs:
 
       - name: Setup Dotnet (Explicit version + invalid channel)
         id: setup-dotnet
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: '8.0.x'
           dotnet-channel: INVALID
@@ -503,7 +503,7 @@ jobs:
 
       - name: Setup Dotnet (Multiline with invalid version)
         id: setup-dotnet
-        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-keyword
+        uses: mahabaleshwars/setup-dotnet@feature/497-dotnet-version-latest-with-channel
         with:
           dotnet-version: |
             latest
