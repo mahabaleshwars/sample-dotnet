@@ -37,8 +37,8 @@ jobs:
         run: |
           echo "Input: ${{ matrix.dotnet-version }}"
           echo "Expected channel: ${{ matrix.expected-major-minor }}"
+          echo "Installed SDKs:"
           dotnet --list-sdks || true
-          dotnet --version || true
           # For very old SDKs, installation may fail on modern runners — that's OK.
           # The key validation is that the action did NOT make an HTTP call to releases-index.json
           # and resolved the channel correctly (visible in the action logs).
@@ -65,14 +65,13 @@ jobs:
       - name: Verify installed SDK major version
         shell: bash
         run: |
-          INSTALLED=$(dotnet --version)
-          echo "Installed: $INSTALLED"
-          MAJOR=$(echo "$INSTALLED" | cut -d. -f1)
-          if [ "$MAJOR" != "${{ matrix.dotnet-version }}" ]; then
-            echo "::error::Expected major version ${{ matrix.dotnet-version }}, got $MAJOR"
+          echo "Installed SDKs:"
+          dotnet --list-sdks
+          if ! dotnet --list-sdks | grep -q "^${{ matrix.dotnet-version }}\."; then
+            echo "::error::Expected .NET ${{ matrix.dotnet-version }} SDK not found"
             exit 1
           fi
-          echo "✅ Correct major version installed"
+          echo "✅ .NET ${{ matrix.dotnet-version }} SDK found"
 
   # Test A.B syntax still works (no regression)
   test-major-minor-syntax:
@@ -95,9 +94,12 @@ jobs:
       - name: Verify
         shell: bash
         run: |
-          INSTALLED=$(dotnet --version)
-          echo "Installed: $INSTALLED"
-          [[ "$INSTALLED" == 8.0.* ]] || { echo "::error::Expected 8.0.x, got $INSTALLED"; exit 1; }
+          echo "Installed SDKs:"
+          dotnet --list-sdks
+          if ! dotnet --list-sdks | grep -q "^8\.0\."; then
+            echo "::error::Expected .NET 8.0.x SDK not found"
+            exit 1
+          fi
           echo "✅ A.B syntax works correctly"
 
   # Test A.B.C exact version syntax (no regression)
@@ -121,10 +123,10 @@ jobs:
       - name: Verify exact version
         shell: bash
         run: |
-          INSTALLED=$(dotnet --version)
-          echo "Installed: $INSTALLED"
-          if [ "$INSTALLED" != "8.0.404" ]; then
-            echo "::error::Expected 8.0.404, got $INSTALLED"
+          echo "Installed SDKs:"
+          dotnet --list-sdks
+          if ! dotnet --list-sdks | grep -q "^8\.0\.404 "; then
+            echo "::error::Expected .NET SDK 8.0.404 not found"
             exit 1
           fi
           echo "✅ Exact version syntax works correctly"
@@ -150,9 +152,12 @@ jobs:
       - name: Verify
         shell: bash
         run: |
-          INSTALLED=$(dotnet --version)
-          echo "Installed: $INSTALLED"
-          [[ "$INSTALLED" == 8.0.* ]] || { echo "::error::Expected 8.0.x, got $INSTALLED"; exit 1; }
+          echo "Installed SDKs:"
+          dotnet --list-sdks
+          if ! dotnet --list-sdks | grep -q "^8\.0\."; then
+            echo "::error::Expected .NET 8.0.x SDK not found"
+            exit 1
+          fi
           echo "✅ Wildcard syntax works correctly"
 
   # Test quality input with major-only version
@@ -177,11 +182,10 @@ jobs:
       - name: Verify
         shell: bash
         run: |
-          INSTALLED=$(dotnet --version)
-          echo "Installed: $INSTALLED"
-          MAJOR=$(echo "$INSTALLED" | cut -d. -f1)
-          if [ "$MAJOR" != "9" ]; then
-            echo "::error::Expected major version 9, got $MAJOR"
+          echo "Installed SDKs:"
+          dotnet --list-sdks
+          if ! dotnet --list-sdks | grep -q "^9\."; then
+            echo "::error::Expected .NET 9 SDK not found"
             exit 1
           fi
           echo "✅ Quality + major-only works correctly"
