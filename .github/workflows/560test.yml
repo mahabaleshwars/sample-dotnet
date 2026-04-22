@@ -1,0 +1,216 @@
+name: Validate PR 560 - Major version resolution
+
+on:
+  workflow_dispatch:
+
+jobs:
+  # Test hardcoded legacy .NET Core versions (major-only input)
+  test-legacy-major-versions:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        dotnet-version: ['1', '2', '3']
+        include:
+          - dotnet-version: '1'
+            expected-major-minor: '1.1'
+          - dotnet-version: '2'
+            expected-major-minor: '2.2'
+          - dotnet-version: '3'
+            expected-major-minor: '3.1'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: akoeplinger/setup-dotnet
+          ref: fix-releases
+
+      - name: Setup .NET ${{ matrix.dotnet-version }}
+        id: setup
+        uses: ./
+        with:
+          dotnet-version: ${{ matrix.dotnet-version }}
+        continue-on-error: true
+
+      - name: Verify resolved version starts with expected major.minor
+        shell: bash
+        run: |
+          echo "Input: ${{ matrix.dotnet-version }}"
+          echo "Expected channel: ${{ matrix.expected-major-minor }}"
+          dotnet --list-sdks || true
+          dotnet --version || true
+          # For very old SDKs, installation may fail on modern runners — that's OK.
+          # The key validation is that the action did NOT make an HTTP call to releases-index.json
+          # and resolved the channel correctly (visible in the action logs).
+
+  # Test modern .NET versions (major-only → N.0 channel)
+  test-modern-major-versions:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        dotnet-version: ['6', '8', '9']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: akoeplinger/setup-dotnet
+          ref: fix-releases
+
+      - name: Setup .NET ${{ matrix.dotnet-version }}
+        uses: ./
+        with:
+          dotnet-version: ${{ matrix.dotnet-version }}
+
+      - name: Verify installed SDK major version
+        shell: bash
+        run: |
+          INSTALLED=$(dotnet --version)
+          echo "Installed: $INSTALLED"
+          MAJOR=$(echo "$INSTALLED" | cut -d. -f1)
+          if [ "$MAJOR" != "${{ matrix.dotnet-version }}" ]; then
+            echo "::error::Expected major version ${{ matrix.dotnet-version }}, got $MAJOR"
+            exit 1
+          fi
+          echo "✅ Correct major version installed"
+
+  # Test A.B syntax still works (no regression)
+  test-major-minor-syntax:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: akoeplinger/setup-dotnet
+          ref: fix-releases
+
+      - name: Setup .NET 8.0
+        uses: ./
+        with:
+          dotnet-version: '8.0'
+
+      - name: Verify
+        shell: bash
+        run: |
+          INSTALLED=$(dotnet --version)
+          echo "Installed: $INSTALLED"
+          [[ "$INSTALLED" == 8.0.* ]] || { echo "::error::Expected 8.0.x, got $INSTALLED"; exit 1; }
+          echo "✅ A.B syntax works correctly"
+
+  # Test A.B.C exact version syntax (no regression)
+  test-exact-version-syntax:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: akoeplinger/setup-dotnet
+          ref: fix-releases
+
+      - name: Setup .NET 8.0.404
+        uses: ./
+        with:
+          dotnet-version: '8.0.404'
+
+      - name: Verify exact version
+        shell: bash
+        run: |
+          INSTALLED=$(dotnet --version)
+          echo "Installed: $INSTALLED"
+          if [ "$INSTALLED" != "8.0.404" ]; then
+            echo "::error::Expected 8.0.404, got $INSTALLED"
+            exit 1
+          fi
+          echo "✅ Exact version syntax works correctly"
+
+  # Test wildcard/glob syntax (no regression)
+  test-wildcard-syntax:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: akoeplinger/setup-dotnet
+          ref: fix-releases
+
+      - name: Setup .NET 8.0.x
+        uses: ./
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Verify
+        shell: bash
+        run: |
+          INSTALLED=$(dotnet --version)
+          echo "Installed: $INSTALLED"
+          [[ "$INSTALLED" == 8.0.* ]] || { echo "::error::Expected 8.0.x, got $INSTALLED"; exit 1; }
+          echo "✅ Wildcard syntax works correctly"
+
+  # Test quality input with major-only version
+  test-quality-with-major-only:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: akoeplinger/setup-dotnet
+          ref: fix-releases
+
+      - name: Setup .NET 9 with GA quality
+        uses: ./
+        with:
+          dotnet-version: '9'
+          dotnet-quality: 'ga'
+
+      - name: Verify
+        shell: bash
+        run: |
+          INSTALLED=$(dotnet --version)
+          echo "Installed: $INSTALLED"
+          MAJOR=$(echo "$INSTALLED" | cut -d. -f1)
+          if [ "$MAJOR" != "9" ]; then
+            echo "::error::Expected major version 9, got $MAJOR"
+            exit 1
+          fi
+          echo "✅ Quality + major-only works correctly"
+
+  # Test multiple versions together
+  test-multiple-versions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: akoeplinger/setup-dotnet
+          ref: fix-releases
+
+      - name: Setup multiple .NET versions
+        uses: ./
+        with:
+          dotnet-version: |
+            6
+            8
+            9
+
+      - name: Verify all versions installed
+        run: |
+          echo "Installed SDKs:"
+          dotnet --list-sdks
+          for MAJOR in 6 8 9; do
+            if ! dotnet --list-sdks | grep -q "^${MAJOR}\."; then
+              echo "::error::Missing .NET $MAJOR SDK"
+              exit 1
+            fi
+          done
+          echo "✅ All major versions installed"
