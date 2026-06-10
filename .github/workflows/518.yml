@@ -1,0 +1,72 @@
+name: Test install-dir fallback (#518)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  # AFTER: the fix. Simulate a non-writable default, expect fallback to $HOME/.dotnet
+  after-fix-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show default state BEFORE
+        run: |
+          echo "Default dir perms:"
+          ls -ld /usr/share/dotnet || echo "does not exist"
+          echo "Current dotnet: $(command -v dotnet || echo none)"
+
+      - name: Make default NON-writable (simulate self-hosted/Larger Runner)
+        run: |
+          sudo chmod 555 /usr/share/dotnet
+          ls -ld /usr/share/dotnet
+
+      - name: Run LOCAL action (with fix)
+        uses: mahabaleshwars/setup-dotnet@feature/518-setup-fallback
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Analyze AFTER
+        run: |
+          echo "DOTNET_INSTALL_DIR=$DOTNET_INSTALL_DIR"
+          echo "DOTNET_ROOT=$DOTNET_ROOT"
+          echo "which dotnet: $(command -v dotnet)"
+          echo "resolved:    $(readlink -f "$(command -v dotnet)")"
+          dotnet --version
+          # Assert it fell back to the user-writable path
+          case "$DOTNET_ROOT" in
+            "$HOME/.dotnet") echo "PASS: fell back to \$HOME/.dotnet" ;;
+            *) echo "FAIL: expected \$HOME/.dotnet, got '$DOTNET_ROOT'"; exit 1 ;;
+          esac
+
+  # BEFORE: published v5 (no fix) under the same broken condition -> should fail
+  before-fix-linux:
+    runs-on: ubuntu-latest
+    continue-on-error: true   # we EXPECT this to fail, proving the bug
+    steps:
+      - name: Make default NON-writable
+        run: sudo chmod 555 /usr/share/dotnet
+
+      - name: Run PUBLISHED action (no fix)
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: This should not be reached if bug reproduces
+        run: dotnet --version
+
+  # NO REGRESSION: normal hosted runner, default writable -> must stay /usr/share/dotnet
+  control-hosted-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mahabaleshwars/setup-dotnet@feature/518-setup-fallback
+        with:
+          dotnet-version: '8.0.x'
+      - name: Assert default is preserved (no fallback, uses pre-cache)
+        run: |
+          echo "DOTNET_ROOT=$DOTNET_ROOT"
+          case "$DOTNET_ROOT" in
+            "/usr/share/dotnet") echo "PASS: default preserved on hosted runner" ;;
+            *) echo "FAIL: expected /usr/share/dotnet, got '$DOTNET_ROOT'"; exit 1 ;;
+          esac
