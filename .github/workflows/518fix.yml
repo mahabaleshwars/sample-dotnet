@@ -6,23 +6,19 @@ jobs:
   after-fix-nonroot:
     runs-on: ubuntu-latest
     container:
-      image: ubuntu:22.04
-      # uid 1001, group root(0) so GitHub-mounted dirs stay accessible;
-      # HOME forced to a writable path the user owns.
+      image: buildpack-deps:jammy-curl   # has curl, wget, ca-certificates; no dotnet
       options: --user 1001:0 -e HOME=/tmp/nrhome
     steps:
-      - name: Prove we are non-root with no write to /usr/share
+      - name: Prove non-root + no write to /usr/share
         run: |
           id
           mkdir -p /tmp/nrhome
-          # this MUST fail, proving the bug condition is real:
           mkdir /usr/share/dotnet 2>&1 || echo "EXPECTED: cannot write /usr/share"
-          command -v sudo || echo "no sudo available (as on locked-down runners)"
+          command -v curl && echo "curl present"
 
       - uses: actions/checkout@v4
 
-      - name: Run action WITH fix
-        uses: mahabaleshwars/setup-dotnet@feature/518-setup-fallback
+      - uses: mahabaleshwars/setup-dotnet@feature/518-setup-fallback
         with:
           dotnet-version: '8.0.x'
 
