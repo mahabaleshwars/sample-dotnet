@@ -23,10 +23,12 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Analyze
+        env:
+          DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: '1'
         run: |
           echo "DOTNET_ROOT=$DOTNET_ROOT"
           dotnet --version
           case "$DOTNET_ROOT" in
-            /tmp/nrhome/.dotnet) echo "PASS: fell back to writable HOME" ;;
+            */.dotnet) echo "PASS: fell back to writable HOME ($DOTNET_ROOT)" ;;
             *) echo "FAIL: got '$DOTNET_ROOT'"; exit 1 ;;
           esac
