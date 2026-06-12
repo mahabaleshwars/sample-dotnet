@@ -1,0 +1,36 @@
+name: Validate #518 (non-root container)
+
+on: workflow_dispatch
+
+jobs:
+  after-fix-nonroot:
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:22.04
+      # uid 1001, group root(0) so GitHub-mounted dirs stay accessible;
+      # HOME forced to a writable path the user owns.
+      options: --user 1001:0 -e HOME=/tmp/nrhome
+    steps:
+      - name: Prove we are non-root with no write to /usr/share
+        run: |
+          id
+          mkdir -p /tmp/nrhome
+          # this MUST fail, proving the bug condition is real:
+          mkdir /usr/share/dotnet 2>&1 || echo "EXPECTED: cannot write /usr/share"
+          command -v sudo || echo "no sudo available (as on locked-down runners)"
+
+      - uses: actions/checkout@v4
+
+      - name: Run action WITH fix
+        uses: ./
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Analyze
+        run: |
+          echo "DOTNET_ROOT=$DOTNET_ROOT"
+          dotnet --version
+          case "$DOTNET_ROOT" in
+            /tmp/nrhome/.dotnet) echo "PASS: fell back to writable HOME" ;;
+            *) echo "FAIL: got '$DOTNET_ROOT'"; exit 1 ;;
+          esac
