@@ -1,0 +1,139 @@
+name: Test prefer-installed-version
+
+on:
+  workflow_dispatch:
+
+jobs:
+  # ── 1. Hosted Ubuntu runner (no container) ─────────────────────────────────
+  ubuntu-hosted:
+    name: Hosted Ubuntu – prefer-installed-version
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: mahabaleshwars/setup-dotnet
+          ref: feature/518-setup-fallback
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build action
+        run: |
+          npm ci
+          npm run build
+
+      - name: List pre-installed SDKs
+        run: dotnet --list-sdks
+
+      # prefer-installed-version: true — should reuse preinstalled SDK, no download
+      - name: Setup .NET (prefer installed – expect hit)
+        id: prefer
+        uses: ./
+        with:
+          dotnet-version: '8.0.x'
+          prefer-installed-version: true
+
+      - name: Verify reused SDK
+        run: |
+          echo "Resolved version: ${{ steps.prefer.outputs.dotnet-version }}"
+          dotnet --version
+
+      # prefer-installed-version: false (default) — always downloads latest patch
+      - name: Setup .NET (default / always download)
+        id: default
+        uses: ./
+        with:
+          dotnet-version: '8.0.x'
+          prefer-installed-version: false
+
+      - name: Verify downloaded SDK
+        run: |
+          echo "Resolved version: ${{ steps.default.outputs.dotnet-version }}"
+          dotnet --version
+
+      # Fallback: request a version not on the image → should download
+      - name: Setup .NET (prefer installed – expect fallback)
+        id: fallback
+        uses: ./
+        with:
+          dotnet-version: '7.0.x'
+          prefer-installed-version: true
+
+      - name: Verify fallback download
+        run: |
+          echo "Resolved version: ${{ steps.fallback.outputs.dotnet-version }}"
+          dotnet --version
+
+  # ── 2. Ubuntu runner + official .NET container ─────────────────────────────
+  ubuntu-container:
+    name: Container – prefer-installed-version
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/dotnet/sdk:8.0   # official image, 8.0 SDK preinstalled
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: mahabaleshwars/setup-dotnet
+          ref: feature/518-setup-fallback
+
+      - name: Install Node (required inside container)
+        run: |
+          apt-get update -qq
+          apt-get install -y --no-install-recommends curl
+          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+          apt-get install -y nodejs
+
+      - name: Build action
+        run: |
+          npm ci
+          npm run build
+
+      - name: List pre-installed SDKs
+        run: dotnet --list-sdks
+
+      # Container already has 8.0 — should be reused, no download
+      - name: Setup .NET (prefer installed – expect hit)
+        id: prefer-container
+        uses: ./
+        with:
+          dotnet-version: '8.0.x'
+          prefer-installed-version: true
+
+      - name: Verify preinstalled SDK was reused
+        run: |
+          echo "Resolved version: ${{ steps.prefer-container.outputs.dotnet-version }}"
+          dotnet --version
+
+      # Request something not in the container image → fallback download
+      - name: Setup .NET (prefer installed – expect fallback)
+        id: fallback-container
+        uses: ./
+        with:
+          dotnet-version: '9.0.x'
+          prefer-installed-version: true
+
+      - name: Verify fallback in container
+        run: |
+          echo "Resolved version: ${{ steps.fallback-container.outputs.dotnet-version }}"
+          dotnet --version
+
+  # ── 3. Unit tests ──────────────────────────────────────────────────────────
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: mahabaleshwars/setup-dotnet
+          ref: feature/518-setup-fallback
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - run: npm ci
+      - run: npm test
