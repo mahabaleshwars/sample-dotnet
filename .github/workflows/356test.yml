@@ -9,8 +9,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Show all preinstalled SDKs
-        run: dotnet --list-sdks
-
-      - name: Show which SDK global.json resolves to
-        run: dotnet --version
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - run: dotnet --list-sdks
+      - run: dotnet --version
