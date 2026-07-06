@@ -1,0 +1,16 @@
+name: Test preinstalled .NET via global.json
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Show all preinstalled SDKs
+        run: dotnet --list-sdks
+
+      - name: Show which SDK global.json resolves to
+        run: dotnet --version
