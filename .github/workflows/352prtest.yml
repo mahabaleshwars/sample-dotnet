@@ -3,9 +3,6 @@ name: Validate dotnet-runtime (sample-dotnet)
 on:
   workflow_dispatch:
 
-env:
-  ACTION_REF: mahabaleshwars/setup-dotnet@feature/352-runtime-only-input
-
 jobs:
   # 1. Install runtimes only — core issue #352 scenario
   runtime-only:
@@ -15,35 +12,71 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - name: Snapshot pre-existing SDKs
+      - name: Snapshot pre-existing SDKs and runtimes
         id: pre
         shell: bash
         run: |
-          echo "SDKs before:"; (dotnet --list-sdks || true)
-          echo "count=$(dotnet --list-sdks 2>/dev/null | wc -l | tr -d ' ')" >> "$GITHUB_OUTPUT"
+          echo "===== SDKs BEFORE ====="
+          (dotnet --list-sdks || true)
+          echo "===== Runtimes BEFORE ====="
+          (dotnet --list-runtimes || true)
+
+          echo "sdk_count=$(dotnet --list-sdks 2>/dev/null | wc -l | tr -d ' ')" >> "$GITHUB_OUTPUT"
+          # Was each requested runtime version ALREADY present on the runner?
+          echo "had_netcore9=$(dotnet --list-runtimes 2>/dev/null | grep -c 'Microsoft.NETCore.App 9.' || true)" >> "$GITHUB_OUTPUT"
+          echo "had_netcore10=$(dotnet --list-runtimes 2>/dev/null | grep -c 'Microsoft.NETCore.App 10.' || true)" >> "$GITHUB_OUTPUT"
+          echo "had_aspnet9=$(dotnet --list-runtimes 2>/dev/null | grep -c 'Microsoft.AspNetCore.App 9.' || true)" >> "$GITHUB_OUTPUT"
+          echo "had_aspnet10=$(dotnet --list-runtimes 2>/dev/null | grep -c 'Microsoft.AspNetCore.App 10.' || true)" >> "$GITHUB_OUTPUT"
 
       - name: Setup dotnet (runtimes only)
         uses: mahabaleshwars/setup-dotnet@feature/352-runtime-only-input
         with:
           dotnet-runtime: |
-            8.0.x
             9.0.x
+            10.0.x
 
       - name: Verify requested runtimes are installed
         shell: bash
         run: |
-          echo "Installed runtimes:"; dotnet --list-runtimes
-          dotnet --list-runtimes | grep -q "Microsoft.NETCore.App 8." || { echo "::error::.NET 8 runtime missing"; exit 1; }
-          dotnet --list-runtimes | grep -q "Microsoft.NETCore.App 9." || { echo "::error::.NET 9 runtime missing"; exit 1; }
-          dotnet --list-runtimes | grep -q "Microsoft.AspNetCore.App 8." || { echo "::error::ASP.NET Core 8 runtime missing"; exit 1; }
-          dotnet --list-runtimes | grep -q "Microsoft.AspNetCore.App 9." || { echo "::error::ASP.NET Core 9 runtime missing"; exit 1; }
+          echo "===== Runtimes AFTER ====="
+          dotnet --list-runtimes
+          for rt in \
+            "Microsoft.NETCore.App 9." \
+            "Microsoft.NETCore.App 10." \
+            "Microsoft.AspNetCore.App 9." \
+            "Microsoft.AspNetCore.App 10."; do
+            dotnet --list-runtimes | grep -q "$rt" || { echo "::error::Runtime missing: $rt"; exit 1; }
+          done
+
+      - name: Verify OUR step actually installed the runtimes (not pre-existing)
+        shell: bash
+        run: |
+          # Compare against the pre-step snapshot. If a runtime wasn't present
+          # before but is now, our action installed it (the real proof).
+          check() {
+            local label="$1" pattern="$2" had="$3"
+            local now
+            now=$(dotnet --list-runtimes 2>/dev/null | grep -c "$pattern" || true)
+            echo "$label: before=$had after=$now"
+            if [ "$had" -eq 0 ] && [ "$now" -eq 0 ]; then
+              echo "::error::$label was neither pre-installed nor installed by the action"; exit 1
+            fi
+            if [ "$had" -gt 0 ] && [ "$now" -le "$had" ]; then
+              echo "::warning::$label was already present before the action; can't attribute install to dotnet-runtime on this runner"
+            fi
+          }
+          check "NETCore 9"  "Microsoft.NETCore.App 9."     "${{ steps.pre.outputs.had_netcore9 }}"
+          check "NETCore 10" "Microsoft.NETCore.App 10."    "${{ steps.pre.outputs.had_netcore10 }}"
+          check "AspNet 9"   "Microsoft.AspNetCore.App 9."  "${{ steps.pre.outputs.had_aspnet9 }}"
+          check "AspNet 10"  "Microsoft.AspNetCore.App 10." "${{ steps.pre.outputs.had_aspnet10 }}"
 
       - name: Verify the action added no SDK
         shell: bash
         run: |
-          echo "SDKs after:"; (dotnet --list-sdks || true)
+          echo "===== SDKs AFTER ====="
+          (dotnet --list-sdks || true)
           after=$(dotnet --list-sdks 2>/dev/null | wc -l | tr -d ' ')
-          before=${{ steps.pre.outputs.count }}
+          before=${{ steps.pre.outputs.sdk_count }}
           echo "SDK count before=$before after=$after"
           [ "$after" -eq "$before" ] || { echo "::error::dotnet-runtime installed an SDK ($before -> $after)"; exit 1; }
 
@@ -55,7 +88,16 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      # Install latest SDK to build with, PLUS runtimes 8 and 9 to run against
+      - name: Snapshot runtimes BEFORE our step
+        id: pre
+        shell: bash
+        run: |
+          echo "===== Runtimes BEFORE ====="
+          (dotnet --list-runtimes || true)
+          echo "had_netcore8=$(dotnet --list-runtimes 2>/dev/null | grep -c 'Microsoft.NETCore.App 8.' || true)" >> "$GITHUB_OUTPUT"
+          echo "had_netcore9=$(dotnet --list-runtimes 2>/dev/null | grep -c 'Microsoft.NETCore.App 9.' || true)" >> "$GITHUB_OUTPUT"
+
+      # Build SDK 10 + install runtimes 8 and 9 (NOT bundled with SDK 10 -> strong proof)
       - name: Setup dotnet (SDK 10 + runtimes 8 & 9)
         uses: mahabaleshwars/setup-dotnet@feature/352-runtime-only-input
         with:
@@ -63,6 +105,18 @@ jobs:
           dotnet-runtime: |
             8.0.x
             9.0.x
+
+      - name: Confirm our step added runtimes 8 & 9
+        shell: bash
+        run: |
+          echo "===== Runtimes AFTER ====="
+          dotnet --list-runtimes
+          now8=$(dotnet --list-runtimes | grep -c 'Microsoft.NETCore.App 8.' || true)
+          now9=$(dotnet --list-runtimes | grep -c 'Microsoft.NETCore.App 9.' || true)
+          echo "NETCore8 before=${{ steps.pre.outputs.had_netcore8 }} after=$now8"
+          echo "NETCore9 before=${{ steps.pre.outputs.had_netcore9 }} after=$now9"
+          [ "$now8" -gt 0 ] || { echo "::error::.NET 8 runtime not present after action"; exit 1; }
+          [ "$now9" -gt 0 ] || { echo "::error::.NET 9 runtime not present after action"; exit 1; }
 
       - name: Scaffold a multi-target xUnit test project
         shell: bash
@@ -94,7 +148,6 @@ jobs:
               [Fact]
               public void PrintsRuntimeVersion()
               {
-                  // Emitted per target framework so we can eyeball it in logs
                   Console.WriteLine($"Running on .NET: {RuntimeInformation.FrameworkDescription}");
                   Assert.StartsWith(".NET", RuntimeInformation.FrameworkDescription);
               }
