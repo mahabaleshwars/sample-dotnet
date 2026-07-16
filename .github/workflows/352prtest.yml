@@ -1,0 +1,101 @@
+name: Validate dotnet-runtime input
+
+on:
+  workflow_dispatch:
+
+jobs:
+  # 1. Install runtimes only (no SDK) — the core issue #352 scenario
+  runtime-only:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup dotnet (runtimes only)
+        uses: mahabaleshwars/setup-dotnet@feature/352-runtime-only-input
+        with:
+          dotnet-runtime: |
+            8.0.x
+            9.0.x
+
+      - name: Verify runtimes are installed
+        shell: bash
+        run: |
+          echo "Installed runtimes:"
+          dotnet --list-runtimes
+          dotnet --list-runtimes | grep -q "Microsoft.NETCore.App 8." || { echo "::error::.NET 8 runtime missing"; exit 1; }
+          dotnet --list-runtimes | grep -q "Microsoft.NETCore.App 9." || { echo "::error::.NET 9 runtime missing"; exit 1; }
+          dotnet --list-runtimes | grep -q "Microsoft.AspNetCore.App 8." || { echo "::error::ASP.NET Core 8 runtime missing"; exit 1; }
+          dotnet --list-runtimes | grep -q "Microsoft.AspNetCore.App 9." || { echo "::error::ASP.NET Core 9 runtime missing"; exit 1; }
+
+      - name: Verify NO SDK was installed
+        shell: bash
+        run: |
+          echo "Installed SDKs:"
+          dotnet --list-sdks || true
+          if [ -n "$(dotnet --list-sdks)" ]; then
+            echo "::error::Expected no SDK, but found one"; exit 1
+          fi
+
+  # 2. SDK + runtimes together — multi-target testing scenario
+  sdk-plus-runtimes:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup dotnet (SDK 9 + runtime 8)
+        uses: mahabaleshwars/setup-dotnet@feature/352-runtime-only-input
+        with:
+          dotnet-version: '9.0.x'
+          dotnet-runtime: '8.0.x'
+
+      - name: Verify SDK and both runtimes present
+        shell: bash
+        run: |
+          echo "SDKs:"; dotnet --list-sdks
+          echo "Runtimes:"; dotnet --list-runtimes
+          dotnet --list-sdks | grep -q "9." || { echo "::error::.NET 9 SDK missing"; exit 1; }
+          dotnet --list-runtimes | grep -q "Microsoft.NETCore.App 8." || { echo "::error::.NET 8 runtime missing"; exit 1; }
+
+  # 3. Backward compatibility — SDK only, no dotnet-runtime input
+  sdk-only-backcompat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup dotnet (SDK only)
+        uses: mahabaleshwars/setup-dotnet@feature/352-runtime-only-input
+        with:
+          dotnet-version: '8.0.x'
+      - name: Verify SDK installed
+        run: |
+          dotnet --list-sdks
+          dotnet --list-sdks | grep -q "8." || { echo "::error::.NET 8 SDK missing"; exit 1; }
+
+  # 4. Unit tests / build / lint on the action's own toolchain
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run format-check
+      - run: npm run lint
+      - run: npm test
+      - name: Ensure dist/ is up to date with src/
+        run: |
+          if [ -n "$(git status --porcelain dist/)" ]; then
+            echo "::error::dist/ is out of date — run 'npm run build' and commit"
+            git --no-pager diff dist/
+            exit 1
+          fi
