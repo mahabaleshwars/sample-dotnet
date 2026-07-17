@@ -1,0 +1,260 @@
+name: Test DOTNET_INSTALL_DIR fallback
+
+# Covers issues #518 (fallback when default dir isn't writable) and
+# #486 (non-root install by default) across all supported runners.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Change this to the fork/branch that contains the fallback changes.
+  DOTNET_VERSION: '8.0.x'
+
+jobs:
+  # 1. Baseline: on hosted runners the default location IS writable, so it must
+  #    stay unchanged (proves the change is NOT breaking and cache is preserved).
+  default-location-unchanged:
+    name: Default location (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: mahabaleshwars/setup-dotnet@fallback-install-dir
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Verify default install location (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          echo "DOTNET_ROOT=$DOTNET_ROOT"
+          if [ "$RUNNER_OS" = "Linux" ]; then expected="/usr/share/dotnet"; fi
+          if [ "$RUNNER_OS" = "macOS" ]; then expected="$HOME/.dotnet"; fi
+          if [ "$DOTNET_ROOT" != "$expected" ]; then
+            echo "::error::Expected default '$expected' but got '$DOTNET_ROOT'"; exit 1
+          fi
+          command -v dotnet
+          dotnet --version
+
+      - name: Verify default install location (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Write-Host "DOTNET_ROOT=$env:DOTNET_ROOT"
+          $expected = "C:\Program Files\dotnet"
+          if ($env:DOTNET_ROOT -ne $expected) {
+            Write-Error "Expected default '$expected' but got '$env:DOTNET_ROOT'"; exit 1
+          }
+          dotnet --version
+
+  # 2. Explicit DOTNET_INSTALL_DIR must always be respected (priority #1),
+  #    even though it is user-writable here.
+  explicit-install-dir:
+    name: Explicit DOTNET_INSTALL_DIR (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Set custom DOTNET_INSTALL_DIR (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: echo "DOTNET_INSTALL_DIR=$HOME/custom-dotnet" >> "$GITHUB_ENV"
+
+      - name: Set custom DOTNET_INSTALL_DIR (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: "echo \"DOTNET_INSTALL_DIR=$env:USERPROFILE\\custom-dotnet\" >> $env:GITHUB_ENV"
+
+      - uses: mahabaleshwars/setup-dotnet@fallback-install-dir
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Verify explicit dir is honored (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          echo "DOTNET_ROOT=$DOTNET_ROOT"
+          if [ "$DOTNET_ROOT" != "$HOME/custom-dotnet" ]; then
+            echo "::error::Explicit dir not honored: $DOTNET_ROOT"; exit 1
+          fi
+          dotnet --version
+
+      - name: Verify explicit dir is honored (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Write-Host "DOTNET_ROOT=$env:DOTNET_ROOT"
+          if ($env:DOTNET_ROOT -ne "$env:USERPROFILE\custom-dotnet") {
+            Write-Error "Explicit dir not honored: $env:DOTNET_ROOT"; exit 1
+          }
+          dotnet --version
+
+  # 3. Relative DOTNET_INSTALL_DIR must be resolved to an absolute path.
+  relative-install-dir:
+    name: Relative DOTNET_INSTALL_DIR
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "DOTNET_INSTALL_DIR=relative-dotnet" >> "$GITHUB_ENV"
+
+      - uses: mahabaleshwars/setup-dotnet@fallback-install-dir
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Verify resolved to absolute path under workspace
+        shell: bash
+        run: |
+          echo "DOTNET_ROOT=$DOTNET_ROOT"
+          expected="$GITHUB_WORKSPACE/relative-dotnet"
+          if [ "$DOTNET_ROOT" != "$expected" ]; then
+            echo "::error::Expected '$expected' but got '$DOTNET_ROOT'"; exit 1
+          fi
+          dotnet --version
+
+  # 4. #518 core case (Linux): default /usr/share/dotnet made NON-writable.
+  #    The action must fall back to $HOME/.dotnet and still succeed.
+  fallback-non-writable-linux:
+    name: Fallback when /usr/share/dotnet not writable
+    runs-on: ubuntu-latest
+    steps:
+      - name: Make default location non-writable
+        run: |
+          sudo mkdir -p /usr/share/dotnet
+          sudo chown root:root /usr/share/dotnet
+          sudo chmod 555 /usr/share/dotnet
+          ls -ld /usr/share/dotnet
+          # Sanity check: the runner user really cannot write here.
+          if touch /usr/share/dotnet/__probe 2>/dev/null; then
+            echo "::error::/usr/share/dotnet is still writable; test setup invalid"; exit 1
+          fi
+
+      - uses: mahabaleshwars/setup-dotnet@fallback-install-dir
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Verify fallback to $HOME/.dotnet
+        shell: bash
+        run: |
+          echo "DOTNET_ROOT=$DOTNET_ROOT"
+          if [ "$DOTNET_ROOT" != "$HOME/.dotnet" ]; then
+            echo "::error::Expected fallback '$HOME/.dotnet' but got '$DOTNET_ROOT'"; exit 1
+          fi
+          command -v dotnet
+          dotnet --version
+          # dotnet must resolve from the fallback dir, not /usr/share/dotnet
+          case "$(command -v dotnet)" in
+            "$HOME/.dotnet"/*) echo "dotnet resolved from fallback";;
+            *) echo "::error::dotnet resolved from unexpected path"; exit 1;;
+          esac
+
+  # 5. #518 (Windows): C:\Program Files\dotnet made NON-writable via deny ACE.
+  #    Must fall back to %USERPROFILE%\.dotnet.
+  fallback-non-writable-windows:
+    name: Fallback when Program Files\dotnet not writable
+    runs-on: windows-latest
+    steps:
+      - name: Deny write on default location
+        shell: pwsh
+        run: |
+          $dir = "C:\Program Files\dotnet"
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          # Explicit deny ACEs take precedence over allow, even for admins.
+          icacls $dir /deny "$($env:USERNAME):(OI)(CI)(W)"
+          icacls $dir
+
+      - uses: mahabaleshwars/setup-dotnet@fallback-install-dir
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Verify fallback to %USERPROFILE%\.dotnet
+        shell: pwsh
+        run: |
+          Write-Host "DOTNET_ROOT=$env:DOTNET_ROOT"
+          $expected = "$env:USERPROFILE\.dotnet"
+          if ($env:DOTNET_ROOT -ne $expected) {
+            Write-Error "Expected fallback '$expected' but got '$env:DOTNET_ROOT'"; exit 1
+          }
+          dotnet --version
+
+      - name: Cleanup deny ACE
+        if: always()
+        shell: pwsh
+        run: icacls "C:\Program Files\dotnet" /remove:d "$env:USERNAME"
+
+  # 6. #486: non-root install. Runs in a container as a non-root user where the
+  #    default /usr/share/dotnet is not writable. Must fall back to $HOME/.dotnet.
+  #    NOTE: image must be Ubuntu-based (glibc-compatible with the JS action),
+  #    have curl + ICU, and a non-root user. Adjust image/user if needed.
+  fallback-non-root-container:
+    name: Non-root container install (#486)
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/devcontainers/base:ubuntu
+      options: --user vscode
+    steps:
+      - name: Show identity and default dir state
+        run: |
+          id
+          ls -ld /usr/share || true
+
+      - uses: mahabaleshwars/setup-dotnet@fallback-install-dir
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Verify non-root fallback
+        shell: bash
+        run: |
+          echo "whoami=$(whoami) HOME=$HOME DOTNET_ROOT=$DOTNET_ROOT"
+          if [ "$DOTNET_ROOT" != "$HOME/.dotnet" ]; then
+            echo "::error::Expected '$HOME/.dotnet' but got '$DOTNET_ROOT'"; exit 1
+          fi
+          dotnet --version
+
+  # 7. Cross-architecture install still works and appends the arch subdir
+  #    on top of the resolved (possibly fallback) base directory.
+  cross-arch:
+    name: Cross-arch install (macOS arm64 -> x64)
+    runs-on: macos-14
+    steps:
+      - uses: mahabaleshwars/setup-dotnet@fallback-install-dir
+        with:
+          dotnet-version: '8.0.x'
+          architecture: 'x64'
+
+      - name: Verify arch subdirectory
+        shell: bash
+        run: |
+          echo "DOTNET_ROOT=$DOTNET_ROOT"
+          case "$DOTNET_ROOT" in
+            */x64) echo "arch subdir applied";;
+            *) echo "::error::Expected DOTNET_ROOT to end with /x64: $DOTNET_ROOT"; exit 1;;
+          esac
+          dotnet --info
+
+  # 8. Multiple versions + global.json, to make sure the resolved dir is stable
+  #    across repeated installs.
+  multiple-versions:
+    name: Multiple versions (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: mahabaleshwars/setup-dotnet@fallback-install-dir
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+
+      - name: List installed SDKs
+        shell: bash
+        run: |
+          echo "DOTNET_ROOT=$DOTNET_ROOT"
+          dotnet --list-sdks
