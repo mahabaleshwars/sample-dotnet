@@ -24,7 +24,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - uses: mahabaleshwars/setup-dotnet@fallback-install-dir
+      - uses: mahabaleshwars/setup-dotnet@518-fallback
         with:
           dotnet-version: '8.0.x'
 
@@ -72,7 +72,7 @@ jobs:
         shell: pwsh
         run: "echo \"DOTNET_INSTALL_DIR=$env:USERPROFILE\\custom-dotnet\" >> $env:GITHUB_ENV"
 
-      - uses: mahabaleshwars/setup-dotnet@fallback-install-dir
+      - uses: mahabaleshwars/setup-dotnet@518-fallback
         with:
           dotnet-version: '8.0.x'
 
@@ -103,7 +103,7 @@ jobs:
     steps:
       - run: echo "DOTNET_INSTALL_DIR=relative-dotnet" >> "$GITHUB_ENV"
 
-      - uses: mahabaleshwars/setup-dotnet@fallback-install-dir
+      - uses: mahabaleshwars/setup-dotnet@518-fallback
         with:
           dotnet-version: '8.0.x'
 
@@ -134,7 +134,7 @@ jobs:
             echo "::error::/usr/share/dotnet is still writable; test setup invalid"; exit 1
           fi
 
-      - uses: mahabaleshwars/setup-dotnet@fallback-install-dir
+      - uses: mahabaleshwars/setup-dotnet@518-fallback
         with:
           dotnet-version: '8.0.x'
 
@@ -168,7 +168,7 @@ jobs:
           icacls $dir /deny "$($env:USERNAME):(OI)(CI)(W)"
           icacls $dir
 
-      - uses: mahabaleshwars/setup-dotnet@fallback-install-dir
+      - uses: mahabaleshwars/setup-dotnet@518-fallback
         with:
           dotnet-version: '8.0.x'
 
@@ -203,7 +203,7 @@ jobs:
           id
           ls -ld /usr/share || true
 
-      - uses: mahabaleshwars/setup-dotnet@fallback-install-dir
+      - uses: mahabaleshwars/setup-dotnet@518-fallback
         with:
           dotnet-version: '8.0.x'
 
@@ -222,7 +222,7 @@ jobs:
     name: Cross-arch install (macOS arm64 -> x64)
     runs-on: macos-14
     steps:
-      - uses: mahabaleshwars/setup-dotnet@fallback-install-dir
+      - uses: mahabaleshwars/setup-dotnet@518-fallback
         with:
           dotnet-version: '8.0.x'
           architecture: 'x64'
@@ -247,7 +247,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - uses: mahabaleshwars/setup-dotnet@fallback-install-dir
+      - uses: mahabaleshwars/setup-dotnet@518-fallback
         with:
           dotnet-version: |
             8.0.x
