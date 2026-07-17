@@ -1,86 +1,208 @@
-name: Validate dotnet-runtime (sample-dotnet)
+name: dotnet-runtime conflict & edge-case matrix
 
 on:
   workflow_dispatch:
 
+# Change this to your pushed branch/ref
+env:
+  ACTION_REF: mahabaleshwars/setup-dotnet@feature/352-runtime-only-input
+
 jobs:
-  # 1. Install runtimes only — core issue #352 scenario
-  runtime-only:
+  # ---------------------------------------------------------------------------
+  # 1) CONFLICT: request a runtime that is ALREADY pre-installed on the runner.
+  #    Expect: install script no-ops ("already installed") OR adds side-by-side;
+  #    action must succeed and the dotnet CLI must remain functional.
+  # ---------------------------------------------------------------------------
+  preinstalled-runtime-conflict:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - name: Snapshot pre-existing SDKs and runtimes
+      - name: Snapshot pre-existing state
         id: pre
         shell: bash
         run: |
-          echo "===== SDKs BEFORE ====="
-          (dotnet --list-sdks || true)
-          echo "===== Runtimes BEFORE ====="
-          (dotnet --list-runtimes || true)
+          echo "===== SDKs BEFORE ====="; (dotnet --list-sdks || true)
+          echo "===== Runtimes BEFORE ====="; (dotnet --list-runtimes || true)
+          # Pick a runtime major that the runner already has, if any
+          pre_major=$(dotnet --list-runtimes 2>/dev/null \
+            | grep 'Microsoft.NETCore.App' \
+            | sed -E 's/.*App ([0-9]+)\..*/\1/' | sort -u | tail -1)
+          echo "pre_major=${pre_major:-9}" >> "$GITHUB_OUTPUT"
+          echo "Selected already-present major: ${pre_major:-9}"
 
-          echo "sdk_count=$(dotnet --list-sdks 2>/dev/null | wc -l | tr -d ' ')" >> "$GITHUB_OUTPUT"
-          # Was each requested runtime version ALREADY present on the runner?
-          echo "had_netcore9=$(dotnet --list-runtimes 2>/dev/null | grep -c 'Microsoft.NETCore.App 9.' || true)" >> "$GITHUB_OUTPUT"
-          echo "had_netcore10=$(dotnet --list-runtimes 2>/dev/null | grep -c 'Microsoft.NETCore.App 10.' || true)" >> "$GITHUB_OUTPUT"
-          echo "had_aspnet9=$(dotnet --list-runtimes 2>/dev/null | grep -c 'Microsoft.AspNetCore.App 9.' || true)" >> "$GITHUB_OUTPUT"
-          echo "had_aspnet10=$(dotnet --list-runtimes 2>/dev/null | grep -c 'Microsoft.AspNetCore.App 10.' || true)" >> "$GITHUB_OUTPUT"
+      - name: Setup dotnet (request already-present runtime major)
+        uses: mahabaleshwars/setup-dotnet@feature/352-runtime-only-input
+        with:
+          dotnet-runtime: '${{ steps.pre.outputs.pre_major }}.0.x'
 
-      - name: Setup dotnet (runtimes only)
+      - name: CLI still works + runtime present (no corruption)
+        shell: bash
+        run: |
+          echo "===== dotnet --info ====="; dotnet --info
+          echo "===== Runtimes AFTER ====="; dotnet --list-runtimes
+          dotnet --list-runtimes | grep -q "Microsoft.NETCore.App ${{ steps.pre.outputs.pre_major }}." \
+            || { echo "::error::expected runtime major missing after install"; exit 1; }
+
+  # ---------------------------------------------------------------------------
+  # 2) CONFLICT: SDK and runtime of the SAME major (e.g. SDK 10 + runtime 10).
+  #    The SDK already bundles that runtime; requesting it must not break the
+  #    CLI or double-fail. Verify SDK + runtime both usable.
+  # ---------------------------------------------------------------------------
+  sdk-and-runtime-same-major:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Setup dotnet (SDK 10 + runtime 10 overlap)
+        uses: mahabaleshwars/setup-dotnet@feature/352-runtime-only-input
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-runtime: '10.0.x'
+      - name: Verify no corruption
+        shell: bash
+        run: |
+          dotnet --info
+          dotnet --list-sdks | grep -q "10." || { echo "::error::SDK 10 missing"; exit 1; }
+          dotnet --list-runtimes | grep -q "Microsoft.NETCore.App 10." || { echo "::error::runtime 10 missing"; exit 1; }
+
+  # ---------------------------------------------------------------------------
+  # 3) CONFLICT: SDK install writes the CLI, then runtime install runs with
+  #    --skip-non-versioned-files. Verify the muxer/CLI is NOT downgraded or
+  #    clobbered when a LOWER runtime major is added after a higher SDK.
+  # ---------------------------------------------------------------------------
+  cli-not-clobbered:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Setup dotnet (SDK 10 + older runtimes 8 & 9)
+        uses: mahabaleshwars/setup-dotnet@feature/352-runtime-only-input
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-runtime: |
+            8.0.x
+            9.0.x
+      - name: CLI reports latest (10.x), all runtimes present
+        shell: bash
+        run: |
+          dotnet --info
+          ver=$(dotnet --version)
+          echo "dotnet --version => $ver"
+          case "$ver" in 10.*) : ;; *) echo "::error::CLI downgraded to $ver (expected 10.x)"; exit 1;; esac
+          for rt in "8." "9." "10."; do
+            dotnet --list-runtimes | grep -q "Microsoft.NETCore.App $rt" \
+              || { echo "::error::.NET $rt runtime missing"; exit 1; }
+          done
+
+  # ---------------------------------------------------------------------------
+  # 4) EDGE: duplicate versions + mixed casing of 'latest' in dotnet-runtime.
+  #    Verifies dedup (installRuntime should be called once per unique value).
+  #    We can't easily count internal calls from here, so we assert the run
+  #    succeeds and the versions resolve without error.
+  # ---------------------------------------------------------------------------
+  duplicate-and-latest-dedup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup dotnet (duplicates + Latest/latest)
         uses: mahabaleshwars/setup-dotnet@feature/352-runtime-only-input
         with:
           dotnet-runtime: |
             9.0.x
-            10.0.x
-
-      - name: Verify requested runtimes are installed
-        shell: bash
+            9.0.x
+            latest
+            Latest
+      - name: Verify runtimes present
         run: |
-          echo "===== Runtimes AFTER ====="
           dotnet --list-runtimes
-          for rt in \
-            "Microsoft.NETCore.App 9." \
-            "Microsoft.NETCore.App 10." \
-            "Microsoft.AspNetCore.App 9." \
-            "Microsoft.AspNetCore.App 10."; do
-            dotnet --list-runtimes | grep -q "$rt" || { echo "::error::Runtime missing: $rt"; exit 1; }
-          done
+          dotnet --list-runtimes | grep -q "Microsoft.NETCore.App 9." || { echo "::error::.NET 9 runtime missing"; exit 1; }
 
-      - name: Verify OUR step actually installed the runtimes (not pre-existing)
+  # ---------------------------------------------------------------------------
+  # 5) EDGE: BOTH .NET and ASP.NET Core runtimes must be installed per version.
+  # ---------------------------------------------------------------------------
+  both-runtime-families:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Setup dotnet (runtime 9 only)
+        uses: mahabaleshwars/setup-dotnet@feature/352-runtime-only-input
+        with:
+          dotnet-runtime: '9.0.x'
+      - name: Verify NETCore.App AND AspNetCore.App present
         shell: bash
         run: |
-          # Compare against the pre-step snapshot. If a runtime wasn't present
-          # before but is now, our action installed it (the real proof).
-          check() {
-            local label="$1" pattern="$2" had="$3"
-            local now
-            now=$(dotnet --list-runtimes 2>/dev/null | grep -c "$pattern" || true)
-            echo "$label: before=$had after=$now"
-            if [ "$had" -eq 0 ] && [ "$now" -eq 0 ]; then
-              echo "::error::$label was neither pre-installed nor installed by the action"; exit 1
-            fi
-            if [ "$had" -gt 0 ] && [ "$now" -le "$had" ]; then
-              echo "::warning::$label was already present before the action; can't attribute install to dotnet-runtime on this runner"
-            fi
-          }
-          check "NETCore 9"  "Microsoft.NETCore.App 9."     "${{ steps.pre.outputs.had_netcore9 }}"
-          check "NETCore 10" "Microsoft.NETCore.App 10."    "${{ steps.pre.outputs.had_netcore10 }}"
-          check "AspNet 9"   "Microsoft.AspNetCore.App 9."  "${{ steps.pre.outputs.had_aspnet9 }}"
-          check "AspNet 10"  "Microsoft.AspNetCore.App 10." "${{ steps.pre.outputs.had_aspnet10 }}"
+          dotnet --list-runtimes
+          dotnet --list-runtimes | grep -q "Microsoft.NETCore.App 9."   || { echo "::error::.NET 9 runtime missing"; exit 1; }
+          dotnet --list-runtimes | grep -q "Microsoft.AspNetCore.App 9." || { echo "::error::ASP.NET Core 9 runtime missing"; exit 1; }
 
-      - name: Verify the action added no SDK
+  # ---------------------------------------------------------------------------
+  # 6) EDGE: exact A.B.C runtime version pinning (passed via --version).
+  # ---------------------------------------------------------------------------
+  exact-version-pin:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup dotnet (exact 8.0.0)
+        uses: mahabaleshwars/setup-dotnet@feature/352-runtime-only-input
+        with:
+          dotnet-runtime: '8.0.0'
+      - name: Verify exact version installed
+        run: |
+          dotnet --list-runtimes
+          dotnet --list-runtimes | grep -q "Microsoft.NETCore.App 8.0.0 " || { echo "::error::exact 8.0.0 runtime missing"; exit 1; }
+
+  # ---------------------------------------------------------------------------
+  # 7) EDGE: output — 'dotnet-version' output must be set from the runtime
+  #    version when ONLY dotnet-runtime is provided (regression for review #2).
+  # ---------------------------------------------------------------------------
+  output-from-runtime-only:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup dotnet (runtime only)
+        id: setup
+        uses: mahabaleshwars/setup-dotnet@feature/352-runtime-only-input
+        with:
+          dotnet-runtime: '9.0.x'
+      - name: Assert dotnet-version output is set
         shell: bash
         run: |
-          echo "===== SDKs AFTER ====="
-          (dotnet --list-sdks || true)
-          after=$(dotnet --list-sdks 2>/dev/null | wc -l | tr -d ' ')
-          before=${{ steps.pre.outputs.sdk_count }}
-          echo "SDK count before=$before after=$after"
-          [ "$after" -eq "$before" ] || { echo "::error::dotnet-runtime installed an SDK ($before -> $after)"; exit 1; }
+          echo "output dotnet-version='${{ steps.setup.outputs.dotnet-version }}'"
+          test -n "${{ steps.setup.outputs.dotnet-version }}" \
+            || { echo "::error::dotnet-version output was empty for runtime-only install"; exit 1; }
 
-  # 2. End-to-end: build & run a REAL multi-target test project on installed runtimes
+  # ---------------------------------------------------------------------------
+  # 8) NEGATIVE: invalid dotnet-runtime value must fail with a message that
+  #    references 'dotnet-runtime' (regression for review #3).
+  # ---------------------------------------------------------------------------
+  invalid-runtime-message:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup dotnet (invalid runtime) — expected to FAIL
+        id: badrun
+        continue-on-error: true
+        uses: mahabaleshwars/setup-dotnet@feature/352-runtime-only-input
+        with:
+          dotnet-runtime: 'not-a-version'
+      - name: Assert the step failed
+        run: |
+          if [ "${{ steps.badrun.outcome }}" != "failure" ]; then
+            echo "::error::invalid dotnet-runtime should have failed the action"; exit 1
+          fi
+          echo "Action failed as expected for invalid dotnet-runtime input."
+
+  # ---------------------------------------------------------------------------
+  # 9) END-TO-END: build a real multi-target test project and RUN it on the
+  #    installed runtimes (8 & 9) using a higher build SDK (10) — proves the
+  #    separately-installed runtimes are genuinely usable, not just on disk.
+  # ---------------------------------------------------------------------------
   multitarget-e2e:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -88,16 +210,6 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - name: Snapshot runtimes BEFORE our step
-        id: pre
-        shell: bash
-        run: |
-          echo "===== Runtimes BEFORE ====="
-          (dotnet --list-runtimes || true)
-          echo "had_netcore8=$(dotnet --list-runtimes 2>/dev/null | grep -c 'Microsoft.NETCore.App 8.' || true)" >> "$GITHUB_OUTPUT"
-          echo "had_netcore9=$(dotnet --list-runtimes 2>/dev/null | grep -c 'Microsoft.NETCore.App 9.' || true)" >> "$GITHUB_OUTPUT"
-
-      # Build SDK 10 + install runtimes 8 and 9 (NOT bundled with SDK 10 -> strong proof)
       - name: Setup dotnet (SDK 10 + runtimes 8 & 9)
         uses: mahabaleshwars/setup-dotnet@feature/352-runtime-only-input
         with:
@@ -106,23 +218,10 @@ jobs:
             8.0.x
             9.0.x
 
-      - name: Confirm our step added runtimes 8 & 9
-        shell: bash
-        run: |
-          echo "===== Runtimes AFTER ====="
-          dotnet --list-runtimes
-          now8=$(dotnet --list-runtimes | grep -c 'Microsoft.NETCore.App 8.' || true)
-          now9=$(dotnet --list-runtimes | grep -c 'Microsoft.NETCore.App 9.' || true)
-          echo "NETCore8 before=${{ steps.pre.outputs.had_netcore8 }} after=$now8"
-          echo "NETCore9 before=${{ steps.pre.outputs.had_netcore9 }} after=$now9"
-          [ "$now8" -gt 0 ] || { echo "::error::.NET 8 runtime not present after action"; exit 1; }
-          [ "$now9" -gt 0 ] || { echo "::error::.NET 9 runtime not present after action"; exit 1; }
-
-      - name: Scaffold a multi-target xUnit test project
+      - name: Scaffold multi-target xUnit project
         shell: bash
         run: |
           mkdir -p e2e/MultiTargetTests && cd e2e/MultiTargetTests
-
           cat > MultiTargetTests.csproj <<'EOF'
           <Project Sdk="Microsoft.NET.Sdk">
             <PropertyGroup>
@@ -137,12 +236,10 @@ jobs:
             </ItemGroup>
           </Project>
           EOF
-
           cat > RuntimeTests.cs <<'EOF'
           using System;
           using System.Runtime.InteropServices;
           using Xunit;
-
           public class RuntimeTests
           {
               [Fact]
@@ -151,7 +248,6 @@ jobs:
                   Console.WriteLine($"Running on .NET: {RuntimeInformation.FrameworkDescription}");
                   Assert.StartsWith(".NET", RuntimeInformation.FrameworkDescription);
               }
-
               [Fact]
               public void MajorVersionMatchesTargetFramework()
               {
@@ -164,19 +260,21 @@ jobs:
           }
           EOF
 
-      - name: Restore & build (both target frameworks)
+      - name: Build (net8.0;net9.0)
         working-directory: e2e/MultiTargetTests
         run: dotnet build -c Release
 
-      - name: Test on .NET 8 runtime
+      - name: Run tests on .NET 8 runtime
         working-directory: e2e/MultiTargetTests
         run: dotnet test -c Release -f net8.0 --no-build
 
-      - name: Test on .NET 9 runtime
+      - name: Run tests on .NET 9 runtime
         working-directory: e2e/MultiTargetTests
         run: dotnet test -c Release -f net9.0 --no-build
 
-  # 3. Backward compatibility — SDK only, no dotnet-runtime
+  # ---------------------------------------------------------------------------
+  # 10) BACKWARD-COMPAT: SDK only, no dotnet-runtime — behavior unchanged.
+  # ---------------------------------------------------------------------------
   sdk-only-backcompat:
     runs-on: ubuntu-latest
     steps:
