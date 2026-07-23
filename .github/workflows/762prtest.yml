@@ -13,7 +13,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install 8.0.x online (default)
         id: setup
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
@@ -36,7 +36,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Preinstall 8.0.x (online)
         id: first
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
@@ -60,7 +60,7 @@ jobs:
     name: check-latest=false reuses pinned A.B.C
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Preinstall a pinned SDK online
         id: first
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
@@ -82,7 +82,7 @@ jobs:
     name: check-latest=false matches A.B.Cxx band
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Preinstall a 1xx-band SDK online
         id: first
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
@@ -108,18 +108,18 @@ jobs:
     name: check-latest=false picks highest installed
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install 8.0.x
-        uses: ./
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '8.0.x'
       - name: Install 9.0.x
-        uses: ./
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '9.0.x'
       - name: latest + check-latest=false reuses the highest installed
         id: latest
-        uses: ./
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: latest
           check-latest: false
@@ -139,7 +139,7 @@ jobs:
     name: check-latest=false falls back online
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Request a version unlikely to be preinstalled
         id: setup
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
@@ -161,7 +161,7 @@ jobs:
     name: check-latest=false cross-arch installs online
     runs-on: macos-latest # arm64 host; request x64 to force cross-arch
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Cross-arch request (x64 on arm64 runner)
         id: setup
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
