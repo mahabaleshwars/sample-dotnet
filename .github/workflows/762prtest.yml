@@ -1,0 +1,173 @@
+name: check-latest 
+
+on:
+  workflow_dispatch:
+
+jobs:
+  # 1) Default behavior unchanged: check-latest defaults to true → online install.
+  default-online:
+    name: default (check-latest=true implicit)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install 8.0.x online (default)
+        id: setup
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        with:
+          dotnet-version: '8.0.x'
+      - name: Verify SDK works and output is set
+        shell: bash
+        run: |
+          echo "resolved: ${{ steps.setup.outputs.dotnet-version }}"
+          test -n "${{ steps.setup.outputs.dotnet-version }}"
+          dotnet --version
+
+  # 2) Reuse a locally installed SDK with check-latest=false (floating A.B.x).
+  #    First install online, then request the same floating range offline-style.
+  reuse-floating:
+    name: check-latest=false reuses floating A.B.x
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preinstall 8.0.x (online)
+        id: first
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        with:
+          dotnet-version: '8.0.x'
+      - name: Reuse it with check-latest=false
+        id: second
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        with:
+          dotnet-version: '8.0.x'
+          check-latest: false
+      - name: Same patch reused (no upgrade/download)
+        shell: bash
+        run: |
+          echo "first:  ${{ steps.first.outputs.dotnet-version }}"
+          echo "second: ${{ steps.second.outputs.dotnet-version }}"
+          test "${{ steps.first.outputs.dotnet-version }}" = "${{ steps.second.outputs.dotnet-version }}"
+
+  # 3) Reuse a locally installed SDK with a pinned version (skips runtime pre-install too).
+  reuse-pinned:
+    name: check-latest=false reuses pinned A.B.C
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preinstall a pinned SDK online
+        id: first
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        with:
+          dotnet-version: '8.0.412'
+      - name: Reuse the exact pinned SDK offline-style
+        id: second
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        with:
+          dotnet-version: '8.0.412'
+          check-latest: false
+      - name: Exact version reused
+        shell: bash
+        run: |
+          test "${{ steps.second.outputs.dotnet-version }}" = "8.0.412"
+
+  # 4) Feature-band (A.B.Cxx) matching with check-latest=false.
+  reuse-feature-band:
+    name: check-latest=false matches A.B.Cxx band
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preinstall a 1xx-band SDK online
+        id: first
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        with:
+          dotnet-version: '8.0.1xx'
+      - name: Reuse a band-matching SDK offline-style
+        id: second
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        with:
+          dotnet-version: '8.0.1xx'
+          check-latest: false
+      - name: Reused SDK is in the requested feature band
+        shell: bash
+        run: |
+          echo "reused: ${{ steps.second.outputs.dotnet-version }}"
+          case "${{ steps.second.outputs.dotnet-version }}" in
+            8.0.1??) echo "band OK" ;;
+            *) echo "unexpected band"; exit 1 ;;
+          esac
+
+  # 5) 'latest' with check-latest=false → highest installed SDK, no network.
+  reuse-latest-highest:
+    name: check-latest=false picks highest installed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install 8.0.x
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        with:
+          dotnet-version: '8.0.x'
+      - name: Install 9.0.x (now two majors present)
+        id: nine
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        with:
+          dotnet-version: '9.0.x'
+      - name: latest + check-latest=false reuses the highest one
+        id: latest
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        with:
+          dotnet-version: latest
+          check-latest: false
+      - name: Highest installed SDK reused
+        shell: bash
+        run: |
+          echo "highest online: ${{ steps.nine.outputs.dotnet-version }}"
+          echo "reused latest:  ${{ steps.latest.outputs.dotnet-version }}"
+          test "${{ steps.latest.outputs.dotnet-version }}" = "${{ steps.nine.outputs.dotnet-version }}"
+
+  # 6) Fallback: check-latest=false but nothing local satisfies → normal online install.
+  fallback-online:
+    name: check-latest=false falls back online
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Request a version unlikely to be preinstalled
+        id: setup
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        with:
+          dotnet-version: '9.0.x'
+          check-latest: false
+      - name: Installed anyway via fallback
+        shell: bash
+        run: |
+          echo "resolved: ${{ steps.setup.outputs.dotnet-version }}"
+          case "${{ steps.setup.outputs.dotnet-version }}" in
+            9.0.*) echo "fallback OK" ;;
+            *) echo "unexpected version"; exit 1 ;;
+          esac
+          dotnet --version
+
+  # 7) Cross-architecture with check-latest=false → always installs online (no local reuse).
+  cross-arch-online:
+    name: check-latest=false cross-arch installs online
+    runs-on: macos-latest # arm64 host; request x64 to force cross-arch
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cross-arch request (x64 on arm64 runner)
+        id: setup
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        with:
+          dotnet-version: '8.0.x'
+          architecture: x64
+          check-latest: false
+      - name: SDK installed for the requested architecture
+        shell: bash
+        run: |
+          echo "resolved: ${{ steps.setup.outputs.dotnet-version }}"
+          test -n "${{ steps.setup.outputs.dotnet-version }}"
