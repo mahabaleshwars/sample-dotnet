@@ -110,27 +110,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install 8.0.x
-        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        uses: ./
         with:
           dotnet-version: '8.0.x'
-      - name: Install 9.0.x (now two majors present)
-        id: nine
-        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+      - name: Install 9.0.x
+        uses: ./
         with:
           dotnet-version: '9.0.x'
-      - name: latest + check-latest=false reuses the highest one
+      - name: latest + check-latest=false reuses the highest installed
         id: latest
-        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        uses: ./
         with:
           dotnet-version: latest
           check-latest: false
-      - name: Highest installed SDK reused
+      - name: Reused version equals the highest stable SDK on disk
         shell: bash
         run: |
-          echo "highest online: ${{ steps.nine.outputs.dotnet-version }}"
-          echo "reused latest:  ${{ steps.latest.outputs.dotnet-version }}"
-          test "${{ steps.latest.outputs.dotnet-version }}" = "${{ steps.nine.outputs.dotnet-version }}"
-
+          reused="${{ steps.latest.outputs.dotnet-version }}"
+          echo "reused: $reused"
+          # Highest stable SDK actually present on the runner (previews excluded,
+          # matching the action's prerelease filtering when quality is empty).
+          highest=$(dotnet --list-sdks | awk '{print $1}' | grep -vi '-' | sort -V | tail -1)
+          echo "highest stable on disk: $highest"
+          test "$reused" = "$highest"
+          
   # 6) Fallback: check-latest=false but nothing local satisfies → normal online install.
   fallback-online:
     name: check-latest=false falls back online
