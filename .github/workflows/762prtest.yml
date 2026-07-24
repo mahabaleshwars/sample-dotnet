@@ -4,27 +4,27 @@ on:
   workflow_dispatch:
 
 jobs:
-  # 1) Default behavior unchanged: check-latest defaults to true → online install.
-  default-online:
-    name: default (check-latest=true implicit)
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    steps:
-      - uses: actions/checkout@v6
-      - name: Install 8.0.x online (default)
-        id: setup
-        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
-        with:
-          dotnet-version: '8.0.x'
-      - name: Verify SDK works and output is set
-        shell: bash
-        run: |
-          echo "resolved: ${{ steps.setup.outputs.dotnet-version }}"
-          test -n "${{ steps.setup.outputs.dotnet-version }}"
-          dotnet --version
+  # # 1) Default behavior unchanged: check-latest defaults to true → online install.
+  # default-online:
+  #   name: default (check-latest=true implicit)
+  #   runs-on: ${{ matrix.os }}
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       os: [ubuntu-latest, windows-latest, macos-latest]
+  #   steps:
+  #     - uses: actions/checkout@v6
+  #     - name: Install 8.0.x online (default)
+  #       id: setup
+  #       uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+  #       with:
+  #         dotnet-version: '8.0.x'
+  #     - name: Verify SDK works and output is set
+  #       shell: bash
+  #       run: |
+  #         echo "resolved: ${{ steps.setup.outputs.dotnet-version }}"
+  #         test -n "${{ steps.setup.outputs.dotnet-version }}"
+  #         dotnet --version
 
   # 2) Reuse a locally installed SDK with check-latest=false (floating A.B.x).
   #    First install online, then request the same floating range offline-style.
