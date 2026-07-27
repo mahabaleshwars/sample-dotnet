@@ -47,10 +47,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Clear toolcache
-        shell: pwsh
-        run: ./__tests__/clear-toolcache.ps1 ${{ runner.os }}
-
       - name: Preinstall a specific 8.0.x SDK (online)
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
@@ -95,11 +91,7 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v7
-
-      - name: Clear toolcache
-        shell: pwsh
-        run: ./__tests__/clear-toolcache.ps1 ${{ runner.os }}
-
+      
       - name: Write global.json (9.0.100 + latestFeature -> floating 9.0)
         shell: pwsh
         run: |
