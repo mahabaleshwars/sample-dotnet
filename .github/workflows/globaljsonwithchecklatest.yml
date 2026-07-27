@@ -37,8 +37,8 @@ jobs:
           '@ | Set-Content -Path global.json -Encoding utf8
           Get-Content global.json
 
-      - name: Setup .NET from global.json (check-latest: true)
-        uses: ./
+      - name: Setup .NET from global.json
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           global-json-file: global.json
           check-latest: true
@@ -65,7 +65,7 @@ jobs:
         run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
 
       - name: Preinstall a specific 8.0.x SDK (online)
-        uses: ./
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '8.0.404'
 
@@ -82,7 +82,7 @@ jobs:
           '@ | Set-Content -Path global.json -Encoding utf8
 
       - name: Setup .NET from global.json (check-latest: false)
-        uses: ./
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           global-json-file: global.json
           check-latest: false
@@ -126,7 +126,7 @@ jobs:
           '@ | Set-Content -Path global.json -Encoding utf8
 
       - name: Setup .NET from global.json (check-latest: false, expect fallback)
-        uses: ./
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           global-json-file: global.json
           check-latest: false
