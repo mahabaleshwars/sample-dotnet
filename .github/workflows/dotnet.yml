@@ -1,10 +1,7 @@
 name: .NET MAUI
 
 on:
-  push:
-    branches:
-      - "main"
-  
+  workflow_dispatch: 
 
 jobs:
   
