@@ -1,9 +1,7 @@
 name: Build, Pack, and Publish to GPR
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch: 
 
 jobs:
   build:
