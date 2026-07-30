@@ -2,7 +2,6 @@ name: 'check-latest: input forms and offline proof'
 
 on:
   workflow_dispatch:
-  pull_request:
 
 jobs:
   accepted-boolean-spellings:
@@ -12,9 +11,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {value: 'true',  expect: 'download'}
-          - {value: 'True',  expect: 'download'}
-          - {value: 'TRUE',  expect: 'download'}
+          - {value: 'true', expect: 'download'}
+          - {value: 'True', expect: 'download'}
+          - {value: 'TRUE', expect: 'download'}
           - {value: 'false', expect: 'reuse'}
           - {value: 'False', expect: 'reuse'}
           - {value: 'FALSE', expect: 'reuse'}
@@ -84,12 +83,15 @@ jobs:
           # Port 9 is the discard port - nothing is listening, so any HTTP(S)
           # attempt fails immediately. If the action tries to reach the release
           # index or the CDN, this step dies.
+          #
+          # Only the lowercase spellings are set: GitHub Actions treats env keys
+          # case-insensitively, so declaring both cases is a duplicate-key error.
+          # Lowercase is also the correct choice - curl ignores uppercase
+          # HTTP_PROXY by design, Windows env vars are case-insensitive, and
+          # @actions/http-client checks both spellings.
           http_proxy: http://127.0.0.1:9
           https_proxy: http://127.0.0.1:9
-          HTTP_PROXY: http://127.0.0.1:9
-          HTTPS_PROXY: http://127.0.0.1:9
           no_proxy: ''
-          NO_PROXY: ''
 
       - name: Assert reuse happened despite no connectivity
         shell: pwsh
@@ -115,10 +117,7 @@ jobs:
         env:
           http_proxy: http://127.0.0.1:9
           https_proxy: http://127.0.0.1:9
-          HTTP_PROXY: http://127.0.0.1:9
-          HTTPS_PROXY: http://127.0.0.1:9
           no_proxy: ''
-          NO_PROXY: ''
       - name: This proves the offline job above was a real test
         shell: pwsh
         run: |
