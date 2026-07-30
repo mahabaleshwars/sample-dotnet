@@ -1,0 +1,242 @@
+name: 'check-latest: input combinations'
+
+on:
+  workflow_dispatch:
+
+jobs:
+  # check-latest x multiline dotnet-version: applied per entry
+  with-multiple-versions:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Only 8.0 is preinstalled
+        uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '8.0.404'}
+      - id: run
+        name: 8.0 should be reused, 9.0 should be downloaded
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+          check-latest: false
+      - shell: pwsh
+        run: |
+          $sdks = (& dotnet --list-sdks) | ForEach-Object { ($_ -split ' ')[0] }
+          Write-Host "after: $($sdks -join ', ')"
+          if (-not ($sdks | Where-Object { $_ -eq '8.0.404' })) {
+            Write-Host "::error::8.0.404 disappeared"; exit 1
+          }
+          if ($sdks | Where-Object { $_ -match '^8\.0\.4' -and $_ -ne '8.0.404' }) {
+            Write-Host "::error::An extra 8.0 SDK was downloaded despite reuse"; exit 1
+          }
+          if (-not ($sdks | Where-Object { $_ -match '^9\.0\.' })) {
+            Write-Host "::error::9.0 was not installed"; exit 1
+          }
+
+  duplicate-versions-with-check-latest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '8.0.404'}
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            8.0.x
+            8.0.x
+            8.0
+            8
+          check-latest: false
+      - shell: pwsh
+        run: |
+          $sdks = (& dotnet --list-sdks) | ForEach-Object { ($_ -split ' ')[0] }
+          if ($sdks.Count -ne 1) {
+            Write-Host "::error::Duplicate specs caused extra installs: $($sdks -join ', ')"
+            exit 1
+          }
+
+  # check-latest x cache
+  with-cache:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '8.0.404'}
+      - name: Produce a lock file
+        shell: pwsh
+        run: |
+          dotnet new classlib -o app --framework net8.0
+          dotnet add app/app.csproj package Newtonsoft.Json --version 13.0.3
+          dotnet restore app/app.csproj --use-lock-file
+      - id: run
+        name: Reuse the SDK while still restoring the NuGet cache
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+          check-latest: false
+          cache: true
+          cache-dependency-path: app/packages.lock.json
+      - shell: pwsh
+        run: |
+          Write-Host "cache-hit='${{ steps.run.outputs.cache-hit }}'"
+          if ('${{ steps.run.outputs.dotnet-version }}' -ne '8.0.404') {
+            Write-Host "::error::cache:true interfered with SDK reuse"; exit 1
+          }
+          dotnet restore app/app.csproj --locked-mode
+
+  # check-latest x source-url / owner / config-file
+  with-nuget-auth:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '8.0.404'}
+      - id: run
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+          check-latest: false
+          source-url: https://api.nuget.org/v3/index.json
+        env:
+          NUGET_AUTH_TOKEN: NOTATOKEN
+      - name: Auth setup must still happen even when the SDK is reused
+        shell: pwsh
+        run: |
+          if ('${{ steps.run.outputs.dotnet-version }}' -ne '8.0.404') {
+            Write-Host "::error::source-url blocked reuse"; exit 1
+          }
+          $cfg = Join-Path $env:RUNNER_TEMP 'NuGet.config'
+          if (-not (Test-Path $cfg)) {
+            Write-Host "::error::NuGet.config was not generated on the reuse path"; exit 1
+          }
+          Get-Content $cfg
+
+  with-gpr-and-owner:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '8.0.404'}
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+          check-latest: false
+          source-url: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
+          owner: ${{ github.repository_owner }}
+        env:
+          NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - shell: pwsh
+        run: Get-Content (Join-Path $env:RUNNER_TEMP 'NuGet.config')
+
+  # check-latest x workloads
+  with-workloads:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '8.0.404'}
+      - id: run
+        name: Workloads must still install onto the reused SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+          check-latest: false
+          workloads: wasm-tools
+      - shell: pwsh
+        run: |
+          if ('${{ steps.run.outputs.dotnet-version }}' -ne '8.0.404') {
+            Write-Host "::error::workloads blocked reuse"; exit 1
+          }
+          dotnet workload list
+
+  # check-latest x custom install dir
+  with-custom-install-dir:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Redirect the install directory
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:GITHUB_WORKSPACE '.dotnet-custom'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          "DOTNET_INSTALL_DIR=$dir" | Out-File $env:GITHUB_ENV -Append
+      - uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '8.0.404'}
+      - id: run
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+          check-latest: false
+      - shell: pwsh
+        run: |
+          if ('${{ steps.run.outputs.dotnet-version }}' -ne '8.0.404') {
+            Write-Host "::error::Reuse failed under a custom DOTNET_INSTALL_DIR"; exit 1
+          }
+
+  # check-latest x outputs
+  outputs-are-populated-on-the-reuse-path:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '8.0.404'}
+      - id: run
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+          check-latest: false
+      - shell: pwsh
+        run: |
+          $v = '${{ steps.run.outputs.dotnet-version }}'
+          if ([string]::IsNullOrWhiteSpace($v)) {
+            Write-Host "::error::dotnet-version output empty on the reuse path"; exit 1
+          }
+          if ([string]::IsNullOrWhiteSpace($env:DOTNET_ROOT)) {
+            Write-Host "::error::DOTNET_ROOT not exported on the reuse path"; exit 1
+          }
+          Write-Host "dotnet-version=$v DOTNET_ROOT=$env:DOTNET_ROOT"
+
+  # check-latest x a real build
+  end-to-end-build-on-reused-sdk:
+    name: 'real build on a reused SDK / ${{ matrix.os }}'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest, macos-15-intel]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '8.0.404'}
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+          check-latest: false
+      - shell: pwsh
+        run: |
+          dotnet new xunit -o sample --framework net8.0
+          dotnet restore sample/sample.csproj
+          dotnet build sample/sample.csproj -c Release --no-restore
+          dotnet test sample/sample.csproj -c Release --no-build
+          dotnet publish sample/sample.csproj -c Release -o out
