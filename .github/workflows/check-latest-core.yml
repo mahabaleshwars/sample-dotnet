@@ -41,7 +41,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Preinstall baseline
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: ${{ env.BASELINE }}
 
@@ -55,7 +55,7 @@ jobs:
 
       - name: Request '${{ matrix.spec }}' with check-latest false
         id: run
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: ${{ matrix.spec }}
           check-latest: false
@@ -90,11 +90,11 @@ jobs:
         spec: ['8.0', '8.0.x', '8.0.4xx', '8', '8.x']
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v5
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '${{ env.BASELINE }}'}
       - id: run
         name: No check-latest input at all - must behave exactly as before
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: ${{ matrix.spec }}
       - shell: pwsh
@@ -119,10 +119,10 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v5
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '${{ env.BASELINE }}'}
       - id: run
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '8.0.x'
           check-latest: true
@@ -154,7 +154,7 @@ jobs:
           - {label: 'newer patch pin', version: '8.0.412', channel: ''}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v5
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '${{ env.BASELINE }}'}
       - id: before
         shell: pwsh
@@ -163,7 +163,7 @@ jobs:
           "count=$c" | Out-File $env:GITHUB_OUTPUT -Append
       - id: run
         continue-on-error: true
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: ${{ matrix.version }}
           dotnet-channel: ${{ matrix.channel }}
@@ -196,13 +196,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install both an 8.0 and a 9.0 SDK
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: |
             ${{ env.BASELINE }}
             9.0.308
       - id: run
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: latest
           dotnet-channel: ${{ matrix.channel }}
@@ -221,13 +221,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v5
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: |
             ${{ env.BASELINE }}
             9.0.308
       - id: run
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: latest
           check-latest: false
