@@ -1,0 +1,239 @@
+name: 'check-latest: core decision matrix'
+
+on:
+  workflow_dispatch:
+
+env:
+  BASELINE: '8.0.404' # deliberately not the newest 8.0 patch
+
+jobs:
+  # ---------------------------------------------------------------
+  # A. Specs that MUST reuse the local SDK when check-latest is false
+  # ---------------------------------------------------------------
+  reuse-expected:
+    name: 'reuse: ${{ matrix.spec }} / ${{ matrix.os }}'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - ubuntu-22.04
+          - ubuntu-24.04-arm
+          - windows-latest
+          - windows-11-arm
+          - macos-latest
+          - macos-15-intel
+        spec:
+          - '8.0.404'   # exact pin
+          - '8.0'       # major.minor
+          - '8.0.x'     # lowercase wildcard
+          - '8.0.X'     # uppercase wildcard
+          - '8.0.*'     # star wildcard
+          - '8.0.4xx'   # feature band
+          - '8'         # bare major
+          - '8.x'
+          - '8.X'
+          - '8.*'
+          - '  8.0.x  ' # padded - installer trims
+          - 'latest'    # channel-less latest picks the highest local
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preinstall baseline
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.BASELINE }}
+
+      - name: Snapshot SDK inventory
+        id: before
+        shell: pwsh
+        run: |
+          $sdks = (& dotnet --list-sdks) | ForEach-Object { ($_ -split ' ')[0] }
+          "count=$($sdks.Count)" | Out-File $env:GITHUB_OUTPUT -Append
+          Write-Host "before: $($sdks -join ', ')"
+
+      - name: Request '${{ matrix.spec }}' with check-latest false
+        id: run
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ matrix.spec }}
+          check-latest: false
+
+      - name: Assert the local SDK was reused
+        shell: pwsh
+        run: |
+          $sdks = (& dotnet --list-sdks) | ForEach-Object { ($_ -split ' ')[0] }
+          Write-Host "after : $($sdks -join ', ')"
+          Write-Host "output: '${{ steps.run.outputs.dotnet-version }}'"
+
+          if ($sdks.Count -ne [int]'${{ steps.before.outputs.count }}') {
+            Write-Host "::error::An SDK was downloaded - reuse did not happen for '${{ matrix.spec }}'"
+            exit 1
+          }
+          if ('${{ steps.run.outputs.dotnet-version }}' -ne '${{ env.BASELINE }}') {
+            Write-Host "::error::Expected output ${{ env.BASELINE }}, got '${{ steps.run.outputs.dotnet-version }}'"
+            exit 1
+          }
+          dotnet --version
+
+  # ------------------------------------------------------------------
+  # B. Same specs with the default (true) MUST still go online
+  # ------------------------------------------------------------------
+  default-still-downloads:
+    name: 'default true: ${{ matrix.spec }} / ${{ matrix.os }}'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        spec: ['8.0', '8.0.x', '8.0.4xx', '8', '8.x']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '${{ env.BASELINE }}'}
+      - id: run
+        name: No check-latest input at all - must behave exactly as before
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ matrix.spec }}
+      - shell: pwsh
+        run: |
+          $sdks = (& dotnet --list-sdks) | ForEach-Object { ($_ -split ' ')[0] }
+          Write-Host "after: $($sdks -join ', ')"
+          if ($sdks.Count -lt 2) {
+            Write-Host "::error::Default behaviour changed - nothing was downloaded"
+            exit 1
+          }
+          if ('${{ steps.run.outputs.dotnet-version }}' -eq '${{ env.BASELINE }}') {
+            Write-Host "::error::Default resolved to the stale baseline"
+            exit 1
+          }
+
+  # Explicit true must be identical to omitting the input.
+  explicit-true-equals-default:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '${{ env.BASELINE }}'}
+      - id: run
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+          check-latest: true
+      - shell: pwsh
+        run: |
+          if ('${{ steps.run.outputs.dotnet-version }}' -eq '${{ env.BASELINE }}') {
+            Write-Host "::error::check-latest:true reused a local SDK"; exit 1
+          }
+
+  # ------------------------------------------------------------------
+  # C. Specs that CANNOT be resolved offline - must fall back online
+  # ------------------------------------------------------------------
+  fallback-expected:
+    name: 'fallback: ${{ matrix.label }} / ${{ matrix.os }}'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - {label: 'bare wildcard x', version: 'x',      channel: ''}
+          - {label: 'bare wildcard X', version: 'X',      channel: ''}
+          - {label: 'bare wildcard *', version: '*',      channel: ''}
+          - {label: 'latest + LTS',    version: 'latest', channel: 'LTS'}
+          - {label: 'latest + STS',    version: 'latest', channel: 'STS'}
+          - {label: 'different major', version: '9.0.x',  channel: ''}
+          - {label: 'different minor', version: '8.1.x',  channel: ''}
+          - {label: 'unmatched band',  version: '8.0.1xx', channel: ''}
+          - {label: 'newer patch pin', version: '8.0.412', channel: ''}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '${{ env.BASELINE }}'}
+      - id: before
+        shell: pwsh
+        run: |
+          $c = ((& dotnet --list-sdks) | Measure-Object).Count
+          "count=$c" | Out-File $env:GITHUB_OUTPUT -Append
+      - id: run
+        continue-on-error: true
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ matrix.version }}
+          dotnet-channel: ${{ matrix.channel }}
+          check-latest: false
+      - name: Assert it did NOT silently reuse the baseline
+        shell: pwsh
+        run: |
+          $sdks = (& dotnet --list-sdks) | ForEach-Object { ($_ -split ' ')[0] }
+          Write-Host "outcome=${{ steps.run.outcome }} after=$($sdks -join ', ')"
+          if ('${{ steps.run.outputs.dotnet-version }}' -eq '${{ env.BASELINE }}') {
+            Write-Host "::error::'${{ matrix.label }}' wrongly reused ${{ env.BASELINE }}"
+            exit 1
+          }
+          if ('${{ steps.run.outcome }}' -eq 'success' -and
+              $sdks.Count -eq [int]'${{ steps.before.outputs.count }}') {
+            Write-Host "::warning::Succeeded without adding an SDK - verify this was a legitimate no-op"
+          }
+
+  # ------------------------------------------------------------------
+  # D. 'latest' + a concrete channel is resolvable offline and MUST reuse
+  # ------------------------------------------------------------------
+  latest-with-concrete-channel:
+    name: 'latest + ${{ matrix.channel }} / ${{ matrix.os }}'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        channel: ['8.0', '8.0.4xx']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install both an 8.0 and a 9.0 SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            ${{ env.BASELINE }}
+            9.0.308
+      - id: run
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: latest
+          dotnet-channel: ${{ matrix.channel }}
+          check-latest: false
+      - name: Assert the channel was honoured, not just 'highest local'
+        shell: pwsh
+        run: |
+          $v = '${{ steps.run.outputs.dotnet-version }}'
+          Write-Host "resolved: $v"
+          if ($v -ne '${{ env.BASELINE }}') {
+            Write-Host "::error::Expected the 8.0 channel to win, got '$v'"
+            exit 1
+          }
+
+  channel-less-latest-picks-highest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            ${{ env.BASELINE }}
+            9.0.308
+      - id: run
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: latest
+          check-latest: false
+      - shell: pwsh
+        run: |
+          if ('${{ steps.run.outputs.dotnet-version }}' -ne '9.0.308') {
+            Write-Host "::error::channel-less latest should pick the highest local SDK"
+            exit 1
+          }
