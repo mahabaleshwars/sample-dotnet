@@ -1,0 +1,389 @@
+name: 'check-latest: reuse preconditions'
+
+on:
+  workflow_dispatch:
+  
+jobs:
+  # ---------- Guard 1: global.json rollForward floor ----------
+  floor-blocks-older-sdk:
+    name: 'floor blocks older / ${{ matrix.os }}'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Local SDK is 8.0.404
+        uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '8.0.404'}
+      - name: global.json demands at least 8.0.412
+        run: printf '{"sdk":{"version":"8.0.412","rollForward":"latestFeature"}}' > global.json
+        shell: bash
+      - id: run
+        uses: actions/setup-dotnet@v5
+        with:
+          check-latest: false
+      - name: Assert the floor was respected AND dotnet agrees
+        shell: pwsh
+        run: |
+          $v = '${{ steps.run.outputs.dotnet-version }}'
+          Write-Host "resolved: $v"
+          if ([version]$v -lt [version]'8.0.412') {
+            Write-Host "::error::Reused an SDK below the global.json floor"; exit 1
+          }
+          # The real regression this guards against: the action reports success
+          # but the CLI then refuses to run.
+          dotnet --version
+
+  floor-allows-equal-and-newer:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - {local: '8.0.412', floor: '8.0.412', label: 'exactly at the floor'}
+          - {local: '8.0.414', floor: '8.0.412', label: 'above the floor'}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '${{ matrix.local }}'}
+      - run: printf '{"sdk":{"version":"${{ matrix.floor }}","rollForward":"latestFeature"}}' > global.json
+        shell: bash
+      - id: before
+        shell: pwsh
+        run: |
+          $c = ((& dotnet --list-sdks) | Measure-Object).Count
+          "count=$c" | Out-File $env:GITHUB_OUTPUT -Append
+      - id: run
+        uses: actions/setup-dotnet@v5
+        with: {check-latest: false}
+      - shell: pwsh
+        run: |
+          $c = ((& dotnet --list-sdks) | Measure-Object).Count
+          if ($c -ne [int]'${{ steps.before.outputs.count }}') {
+            Write-Host "::error::'${{ matrix.label }}' should have been reused"; exit 1
+          }
+          if ('${{ steps.run.outputs.dotnet-version }}' -ne '${{ matrix.local }}') {
+            Write-Host "::error::Expected ${{ matrix.local }}"; exit 1
+          }
+          dotnet --version
+
+  # Every rollForward policy, with a local SDK that sits below the declared version.
+  floor-across-rollforward-policies:
+    name: 'rollForward=${{ matrix.policy }}'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        policy:
+          [disable, patch, feature, minor, major, latestPatch, latestFeature, latestMinor, latestMajor]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '8.0.404'}
+      - run: printf '{"sdk":{"version":"8.0.412","rollForward":"${{ matrix.policy }}"}}' > global.json
+        shell: bash
+      - id: run
+        continue-on-error: true
+        uses: actions/setup-dotnet@v5
+        with: {check-latest: false}
+      - shell: pwsh
+        run: |
+          Write-Host "outcome=${{ steps.run.outcome }} resolved='${{ steps.run.outputs.dotnet-version }}'"
+          if ('${{ steps.run.outputs.dotnet-version }}' -eq '8.0.404') {
+            Write-Host "::error::rollForward=${{ matrix.policy }} let a below-floor SDK through"
+            exit 1
+          }
+          dotnet --list-sdks
+
+  # No rollForward => exact pin, no floor concept involved.
+  global-json-exact-pin-reuses:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '8.0.404'}
+      - run: printf '{"sdk":{"version":"8.0.404"}}' > global.json
+        shell: bash
+      - id: run
+        uses: actions/setup-dotnet@v5
+        with: {check-latest: false}
+      - shell: pwsh
+        run: |
+          if ('${{ steps.run.outputs.dotnet-version }}' -ne '8.0.404') {
+            Write-Host "::error::Exact global.json pin was not reused"; exit 1
+          }
+
+  global-json-custom-path-with-floor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '8.0.404'}
+      - run: |
+          mkdir -p build/config
+          printf '{"sdk":{"version":"8.0.412","rollForward":"latestFeature"}}' > build/config/global.json
+        shell: bash
+      - id: run
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: build/config/global.json
+          check-latest: false
+      - shell: pwsh
+        run: |
+          if ([version]'${{ steps.run.outputs.dotnet-version }}' -lt [version]'8.0.412') {
+            Write-Host "::error::Floor from a custom global.json path was ignored"; exit 1
+          }
+
+  # ---------- Guard 2: dotnet-quality ----------
+  quality-ga-will-not-reuse-prerelease:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install a prerelease SDK only
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0'
+          dotnet-quality: preview
+      - name: Confirm the local SDK really is a prerelease
+        shell: pwsh
+        run: |
+          $sdks = (& dotnet --list-sdks) | ForEach-Object { ($_ -split ' ')[0] }
+          Write-Host "local: $($sdks -join ', ')"
+          if (-not ($sdks | Where-Object { $_ -match '-' })) {
+            Write-Host "::notice::No prerelease present - this job is inconclusive today"
+          }
+      - id: run
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0'
+          dotnet-quality: ga
+          check-latest: false
+      - shell: pwsh
+        run: |
+          if ('${{ steps.run.outputs.dotnet-version }}' -match '-') {
+            Write-Host "::error::A GA request reused a prerelease SDK"; exit 1
+          }
+
+  quality-preview-will-not-reuse-ga:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        quality: [preview, daily]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install a GA SDK only
+        uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '8.0.404'}
+      - id: run
+        continue-on-error: true
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0'
+          dotnet-quality: ${{ matrix.quality }}
+          check-latest: false
+      - shell: pwsh
+        run: |
+          if ('${{ steps.run.outputs.dotnet-version }}' -eq '8.0.404') {
+            Write-Host "::error::A ${{ matrix.quality }} request reused a GA SDK"; exit 1
+          }
+
+  quality-ga-reuses-ga:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '8.0.404'}
+      - id: run
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0'
+          dotnet-quality: ga
+          check-latest: false
+      - shell: pwsh
+        run: |
+          if ('${{ steps.run.outputs.dotnet-version }}' -ne '8.0.404') {
+            Write-Host "::error::GA + GA should have reused"; exit 1
+          }
+
+  # ---------- Guard 3: the dotnet muxer must exist ----------
+  missing-muxer-forces-online:
+    name: 'broken install / ${{ matrix.os }}'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '8.0.404'}
+      - name: Simulate a half-removed installation
+        shell: pwsh
+        run: |
+          $root = $env:DOTNET_ROOT
+          $muxer = if ($IsWindows) { Join-Path $root 'dotnet.exe' } else { Join-Path $root 'dotnet' }
+          Write-Host "Removing muxer at $muxer (SDK folders stay behind)"
+          Remove-Item $muxer -Force
+          Get-ChildItem (Join-Path $root 'sdk')
+      - id: run
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.404'
+          check-latest: false
+      - name: Assert the muxer was restored by an online install
+        shell: pwsh
+        run: |
+          $root = $env:DOTNET_ROOT
+          $muxer = if ($IsWindows) { Join-Path $root 'dotnet.exe' } else { Join-Path $root 'dotnet' }
+          if (-not (Test-Path $muxer)) {
+            Write-Host "::error::Reuse was reported but the CLI is still missing"; exit 1
+          }
+          & dotnet --version
+
+  empty-sdk-directory-forces-online:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Point at a pristine, empty install dir
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.dotnet-empty"
+          echo "DOTNET_INSTALL_DIR=$GITHUB_WORKSPACE/.dotnet-empty" >> "$GITHUB_ENV"
+      - id: run
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.404'
+          check-latest: false
+      - shell: pwsh
+        run: |
+          if ('${{ steps.run.outputs.dotnet-version }}' -ne '8.0.404') {
+            Write-Host "::error::Expected a clean online install"; exit 1
+          }
+          dotnet --version
+
+  symlinked-sdk-folder-is-reused:
+    name: 'symlinked SDK dir (container-image pattern)'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '8.0.404'}
+      - name: Replace the SDK folder with a symlink to a relocated copy
+        run: |
+          set -eux
+          ROOT="$DOTNET_ROOT"
+          mkdir -p "$HOME/relocated"
+          mv "$ROOT/sdk/8.0.404" "$HOME/relocated/8.0.404"
+          ln -s "$HOME/relocated/8.0.404" "$ROOT/sdk/8.0.404"
+          ls -la "$ROOT/sdk"
+      - id: run
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+          check-latest: false
+      - shell: pwsh
+        run: |
+          if ('${{ steps.run.outputs.dotnet-version }}' -ne '8.0.404') {
+            Write-Host "::error::A symlinked SDK folder was not recognised"; exit 1
+          }
+
+  # ---------- Guard 4: cross-architecture ----------
+  cross-arch-ignores-check-latest:
+    name: 'cross-arch / ${{ matrix.os }}'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-latest,  arch: arm64}
+          - {os: windows-latest, arch: x86}
+          - {os: macos-latest,   arch: x64}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '8.0.404'}
+      - id: run
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.404'
+          architecture: ${{ matrix.arch }}
+          check-latest: false
+      - name: Assert it installed into an arch-specific directory
+        shell: pwsh
+        run: |
+          Write-Host "DOTNET_ROOT=$env:DOTNET_ROOT"
+          if ($env:DOTNET_ROOT -notlike '*${{ matrix.arch }}*') {
+            Write-Host "::error::check-latest:false short-circuited a cross-arch request"
+            exit 1
+          }
+
+  native-arch-still-reuses:
+    name: 'explicit native arch still reuses'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-latest,  arch: x64}
+          - {os: windows-latest, arch: x64}
+          - {os: macos-latest,   arch: arm64}
+          - {os: macos-15-intel, arch: x64}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.404'
+          architecture: ${{ matrix.arch }}
+      - id: run
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+          architecture: ${{ matrix.arch }}
+          check-latest: false
+      - shell: pwsh
+        run: |
+          if ('${{ steps.run.outputs.dotnet-version }}' -ne '8.0.404') {
+            Write-Host "::error::An explicitly-native architecture blocked reuse"; exit 1
+          }
+
+  # ---------- Guard 5: unparseable / unknown input ----------
+  invalid-spec-still-errors-with-check-latest-false:
+    name: 'invalid spec must still fail: ${{ matrix.version }}'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ['8.0.1XX', '8.0.0.0', 'abc', '8.', '8.0.42x']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Make a tempting local SDK available
+        uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '8.0.404'}
+      - id: bad
+        continue-on-error: true
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ matrix.version }}
+          check-latest: false
+      - name: check-latest must not turn a hard error into a silent success
+        shell: pwsh
+        run: |
+          if ('${{ steps.bad.outcome }}' -ne 'failure') {
+            Write-Host "::error::'${{ matrix.version }}' was accepted with check-latest:false"
+            exit 1
+          }
+          if ('${{ steps.bad.outputs.dotnet-version }}' -eq '8.0.404') {
+            Write-Host "::error::An invalid spec matched a local SDK"; exit 1
+          }
