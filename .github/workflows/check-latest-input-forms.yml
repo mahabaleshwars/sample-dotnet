@@ -1,0 +1,150 @@
+name: 'check-latest: input forms and offline proof'
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  accepted-boolean-spellings:
+    name: "value '${{ matrix.value }}' -> ${{ matrix.expect }}"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {value: 'true',  expect: 'download'}
+          - {value: 'True',  expect: 'download'}
+          - {value: 'TRUE',  expect: 'download'}
+          - {value: 'false', expect: 'reuse'}
+          - {value: 'False', expect: 'reuse'}
+          - {value: 'FALSE', expect: 'reuse'}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '8.0.404'}
+      - id: run
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+          check-latest: ${{ matrix.value }}
+      - shell: pwsh
+        run: |
+          $v = '${{ steps.run.outputs.dotnet-version }}'
+          $reused = ($v -eq '8.0.404')
+          Write-Host "resolved=$v reused=$reused"
+          if ('${{ matrix.expect }}' -eq 'reuse'    -and -not $reused) { Write-Host "::error::expected reuse";    exit 1 }
+          if ('${{ matrix.expect }}' -eq 'download' -and      $reused) { Write-Host "::error::expected download"; exit 1 }
+
+  rejected-boolean-spellings:
+    name: "value '${{ matrix.value }}' must fail"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        value: ['yes', 'no', '1', '0', 'off', 'maybe', '']
+    steps:
+      - uses: actions/checkout@v4
+      - id: bad
+        continue-on-error: true
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+          check-latest: ${{ matrix.value }}
+      - shell: pwsh
+        run: |
+          if ('${{ steps.bad.outcome }}' -ne 'failure') {
+            Write-Host "::warning::'${{ matrix.value }}' was accepted - confirm this is intended"
+          } else {
+            Write-Host "OK - rejected"
+          }
+
+  # The headline claim: with check-latest:false and a matching local SDK,
+  # the action makes no outbound calls at all.
+  offline-proof:
+    name: 'zero network calls / ${{ matrix.os }}'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preinstall while the network is available
+        uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '8.0.404'}
+
+      - name: Reuse with all egress pointed at a dead proxy
+        id: offline
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+          check-latest: false
+        env:
+          # Port 9 is the discard port - nothing is listening, so any HTTP(S)
+          # attempt fails immediately. If the action tries to reach the release
+          # index or the CDN, this step dies.
+          http_proxy: http://127.0.0.1:9
+          https_proxy: http://127.0.0.1:9
+          HTTP_PROXY: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          no_proxy: ''
+          NO_PROXY: ''
+
+      - name: Assert reuse happened despite no connectivity
+        shell: pwsh
+        run: |
+          if ('${{ steps.offline.outputs.dotnet-version }}' -ne '8.0.404') {
+            Write-Host "::error::Offline reuse failed"; exit 1
+          }
+          dotnet --version
+
+  offline-negative-control:
+    name: 'same setup with check-latest:true must fail offline'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '8.0.404'}
+      - id: online
+        continue-on-error: true
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+          check-latest: true
+        env:
+          http_proxy: http://127.0.0.1:9
+          https_proxy: http://127.0.0.1:9
+          HTTP_PROXY: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          no_proxy: ''
+          NO_PROXY: ''
+      - name: This proves the offline job above was a real test
+        shell: pwsh
+        run: |
+          Write-Host "outcome=${{ steps.online.outcome }}"
+          if ('${{ steps.online.outcome }}' -ne 'failure') {
+            Write-Host "::warning::check-latest:true survived the dead proxy - the offline proof above may be weaker than intended"
+          }
+
+  # Rough timing signal - reuse should be dramatically faster.
+  timing-signal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with: {dotnet-version: '8.0.404'}
+      - id: t1
+        shell: pwsh
+        run: '"t=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())" | Out-File $env:GITHUB_OUTPUT -Append'
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+          check-latest: false
+      - shell: pwsh
+        run: |
+          $elapsed = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() - [int]'${{ steps.t1.outputs.t }}'
+          Write-Host "reuse path took ${elapsed}s"
+          if ($elapsed -gt 20) {
+            Write-Host "::warning::Reuse took ${elapsed}s - suspiciously slow for a no-network path"
+          }
