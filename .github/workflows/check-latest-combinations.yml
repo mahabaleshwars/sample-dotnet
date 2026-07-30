@@ -14,11 +14,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Only 8.0 is preinstalled
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
       - id: run
         name: 8.0 should be reused, 9.0 should be downloaded
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: |
             8.0.x
@@ -42,9 +42,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v5
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
-      - uses: actions/setup-dotnet@v5
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: |
             8.0.x
@@ -69,7 +69,7 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v5
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
       - name: Produce a lock file
         shell: pwsh
@@ -79,7 +79,7 @@ jobs:
           dotnet restore app/app.csproj --use-lock-file
       - id: run
         name: Reuse the SDK while still restoring the NuGet cache
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '8.0.x'
           check-latest: false
@@ -102,10 +102,10 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v5
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
       - id: run
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '8.0.x'
           check-latest: false
@@ -128,9 +128,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v5
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
-      - uses: actions/setup-dotnet@v5
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '8.0.x'
           check-latest: false
@@ -150,11 +150,11 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v5
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
       - id: run
         name: Workloads must still install onto the reused SDK
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '8.0.x'
           check-latest: false
@@ -181,10 +181,10 @@ jobs:
           $dir = Join-Path $env:GITHUB_WORKSPACE '.dotnet-custom'
           New-Item -ItemType Directory -Force -Path $dir | Out-Null
           "DOTNET_INSTALL_DIR=$dir" | Out-File $env:GITHUB_ENV -Append
-      - uses: actions/setup-dotnet@v5
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
       - id: run
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '8.0.x'
           check-latest: false
@@ -199,10 +199,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v5
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
       - id: run
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '8.0.x'
           check-latest: false
@@ -227,9 +227,9 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest, macos-15-intel]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v5
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
-      - uses: actions/setup-dotnet@v5
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '8.0.x'
           check-latest: false
