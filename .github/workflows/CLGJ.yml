@@ -1,0 +1,259 @@
+name: 'check-latest x global.json rollForward'
+
+on:
+  workflow_dispatch:
+
+env:
+  DOTNET_MULTILEVEL_LOOKUP: '0'
+  DOTNET_NOLOGO: '1'
+
+jobs:
+  # =====================================================================
+  # All 18 combinations against a controlled local SDK inventory.
+  #
+  # Baseline installed: 8.0.100, 8.0.412, 9.0.308
+  #   - 8.0.100 -> the exact pin, and the only SDK in feature band 1xx
+  #   - 8.0.412 -> a higher feature band inside 8.0
+  #   - 9.0.308 -> a higher major, to prove 'latestMinor' stays on 8.0
+  #
+  # The allowPrerelease pairs (1/2, 3/4, ...) must produce identical results,
+  # because the action never reads that field.
+  # =====================================================================
+  rollforward-with-check-latest-false:
+    name: '#${{ matrix.number }} ${{ matrix.rollForward }} / prerelease=${{ matrix.allowPrerelease }}'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # rollForward values that leave the spec as the exact pin, no floor
+          - {number: 1,  rollForward: patch,         allowPrerelease: false, spec: '8.0.100', expected: '8.0.100'}
+          - {number: 2,  rollForward: patch,         allowPrerelease: true,  spec: '8.0.100', expected: '8.0.100'}
+          - {number: 3,  rollForward: feature,       allowPrerelease: false, spec: '8.0.100', expected: '8.0.100'}
+          - {number: 4,  rollForward: feature,       allowPrerelease: true,  spec: '8.0.100', expected: '8.0.100'}
+          - {number: 5,  rollForward: minor,         allowPrerelease: false, spec: '8.0.100', expected: '8.0.100'}
+          - {number: 6,  rollForward: minor,         allowPrerelease: true,  spec: '8.0.100', expected: '8.0.100'}
+          - {number: 7,  rollForward: major,         allowPrerelease: false, spec: '8.0.100', expected: '8.0.100'}
+          - {number: 8,  rollForward: major,         allowPrerelease: true,  spec: '8.0.100', expected: '8.0.100'}
+          - {number: 17, rollForward: disable,       allowPrerelease: false, spec: '8.0.100', expected: '8.0.100'}
+          - {number: 18, rollForward: disable,       allowPrerelease: true,  spec: '8.0.100', expected: '8.0.100'}
+
+          # latestPatch -> 8.0.1xx, floor 8.0.100. Only 8.0.100 is in band 1xx.
+          - {number: 9,  rollForward: latestPatch,   allowPrerelease: false, spec: '8.0.1xx', expected: '8.0.100'}
+          - {number: 10, rollForward: latestPatch,   allowPrerelease: true,  spec: '8.0.1xx', expected: '8.0.100'}
+
+          # latestFeature -> 8.0, floor 8.0.100. Highest 8.0.* wins.
+          - {number: 11, rollForward: latestFeature, allowPrerelease: false, spec: '8.0',     expected: '8.0.412'}
+          - {number: 12, rollForward: latestFeature, allowPrerelease: true,  spec: '8.0',     expected: '8.0.412'}
+
+          # latestMinor -> bare major 8, which the action maps to channel 8.0.
+          # It must NOT jump to 9.0.308.
+          - {number: 13, rollForward: latestMinor,   allowPrerelease: false, spec: '8',       expected: '8.0.412'}
+          - {number: 14, rollForward: latestMinor,   allowPrerelease: true,  spec: '8',       expected: '8.0.412'}
+
+          # latestMajor -> empty spec, which cannot be resolved offline at all.
+          - {number: 15, rollForward: latestMajor,   allowPrerelease: false, spec: '(empty)', expected: 'ONLINE'}
+          - {number: 16, rollForward: latestMajor,   allowPrerelease: true,  spec: '(empty)', expected: 'ONLINE'}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Runner images ship .NET preinstalled, which would pollute the local
+      # SDK inventory and make every assertion below meaningless.
+      - name: Isolate the .NET install directory
+        shell: bash
+        run: |
+          dir="$RUNNER_TEMP/dotnet-isolated"
+          rm -rf "$dir" && mkdir -p "$dir"
+          echo "DOTNET_INSTALL_DIR=$dir" >> "$GITHUB_ENV"
+
+      - name: Preinstall the baseline inventory
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        with:
+          dotnet-version: |
+            8.0.100
+            8.0.412
+            9.0.308
+
+      - name: Verify isolation
+        id: before
+        shell: pwsh
+        run: |
+          $sdks = (& dotnet --list-sdks) | ForEach-Object { ($_ -split ' ')[0] } | Sort-Object
+          Write-Host "local inventory: $($sdks -join ', ')"
+          "count=$($sdks.Count)" | Out-File $env:GITHUB_OUTPUT -Append
+          $expected = @('8.0.100','8.0.412','9.0.308')
+          if (Compare-Object $sdks $expected) {
+            Write-Host "::error::Isolation failed - expected exactly $($expected -join ', ')"
+            exit 1
+          }
+
+      - name: 'Write global.json (#${{ matrix.number }})'
+        shell: pwsh
+        run: |
+          $json = @'
+          {
+            "sdk": {
+              "version": "8.0.100",
+              "rollForward": "${{ matrix.rollForward }}",
+              "allowPrerelease": ${{ matrix.allowPrerelease }}
+            }
+          }
+          '@
+          Set-Content -Path global.json -Value $json -NoNewline
+          Get-Content global.json
+          Write-Host "action rewrites the spec to: ${{ matrix.spec }}"
+
+      - name: Run with check-latest false
+        id: run
+        continue-on-error: true
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        with:
+          check-latest: false
+
+      - name: Assert the resolved SDK
+        shell: pwsh
+        run: |
+          $v   = '${{ steps.run.outputs.dotnet-version }}'
+          $sdks = (& dotnet --list-sdks) | ForEach-Object { ($_ -split ' ')[0] }
+          Write-Host "outcome  : ${{ steps.run.outcome }}"
+          Write-Host "resolved : '$v'"
+          Write-Host "inventory: $($sdks -join ', ')"
+
+          if ('${{ matrix.expected }}' -eq 'ONLINE') {
+            # latestMajor produces an empty version spec, which the offline
+            # matcher deliberately refuses to resolve, so it must fall back.
+            if ($v -in @('8.0.100','8.0.412','9.0.308')) {
+              Write-Host "::error::latestMajor wrongly reused a local SDK ($v)"
+              exit 1
+            }
+            Write-Host "OK - fell back to the online path as expected"
+          }
+          else {
+            if ('${{ steps.run.outcome }}' -ne 'success') {
+              Write-Host "::error::Step failed but a reuse was expected"; exit 1
+            }
+            if ($v -ne '${{ matrix.expected }}') {
+              Write-Host "::error::Expected '${{ matrix.expected }}' but got '$v'"
+              exit 1
+            }
+            if ($sdks.Count -ne [int]'${{ steps.before.outputs.count }}') {
+              Write-Host "::error::An SDK was downloaded - this should have been a pure reuse"
+              exit 1
+            }
+            Write-Host "OK - reused $v with no download"
+          }
+
+      - name: The CLI must agree with what the action reported
+        if: matrix.expected != 'ONLINE'
+        shell: pwsh
+        run: |
+          # Guards the real regression: the action reports success, then the
+          # CLI refuses to run because global.json is not satisfied.
+          dotnet --version
+
+  # =====================================================================
+  # Where check-latest actually changes the outcome.
+  # Runs false and true back to back in the same job so the two results are
+  # directly comparable without depending on today's newest patch numbers.
+  # =====================================================================
+  false-vs-true-divergence:
+    name: 'divergence: ${{ matrix.rollForward }}'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rollForward: [latestPatch, latestFeature, latestMinor, latestMajor]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Isolate the .NET install directory
+        shell: bash
+        run: |
+          dir="$RUNNER_TEMP/dotnet-isolated"
+          rm -rf "$dir" && mkdir -p "$dir"
+          echo "DOTNET_INSTALL_DIR=$dir" >> "$GITHUB_ENV"
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        with:
+          dotnet-version: |
+            8.0.100
+            8.0.412
+      - shell: bash
+        run: |
+          printf '{"sdk":{"version":"8.0.100","rollForward":"${{ matrix.rollForward }}","allowPrerelease":false}}' > global.json
+          cat global.json
+
+      - id: off
+        continue-on-error: true
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        with: {check-latest: false}
+
+      - id: on
+        continue-on-error: true
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        with: {check-latest: true}
+
+      - shell: pwsh
+        run: |
+          $off = '${{ steps.off.outputs.dotnet-version }}'
+          $on  = '${{ steps.on.outputs.dotnet-version }}'
+          Write-Host "check-latest:false -> '$off'"
+          Write-Host "check-latest:true  -> '$on'"
+          if ([string]::IsNullOrWhiteSpace($on)) {
+            Write-Host "::error::The online path produced no version"; exit 1
+          }
+          if ('${{ matrix.rollForward }}' -eq 'latestMajor') {
+            Write-Host "::notice::latestMajor never reuses locally, so both paths go online"
+          }
+          elseif ($off -eq $on) {
+            Write-Host "::warning::Both paths resolved to '$off' - the local SDK already was the newest, so this run is inconclusive"
+          }
+          else {
+            Write-Host "OK - check-latest changed the outcome"
+          }
+          dotnet --version
+
+  # =====================================================================
+  # The floor: when the local SDK is OLDER than global.json's sdk.version,
+  # reuse must be refused even though the rewritten spec would match.
+  # =====================================================================
+  floor-blocks-below-declared-version:
+    name: 'floor: ${{ matrix.rollForward }}'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rollForward: [latestPatch, latestFeature, latestMinor]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Isolate the .NET install directory
+        shell: bash
+        run: |
+          dir="$RUNNER_TEMP/dotnet-isolated"
+          rm -rf "$dir" && mkdir -p "$dir"
+          echo "DOTNET_INSTALL_DIR=$dir" >> "$GITHUB_ENV"
+      - name: Local SDK sits BELOW the declared version
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        with: {dotnet-version: '8.0.100'}
+      - name: global.json declares 8.0.412
+        shell: bash
+        run: |
+          printf '{"sdk":{"version":"8.0.412","rollForward":"${{ matrix.rollForward }}","allowPrerelease":false}}' > global.json
+          cat global.json
+      - id: run
+        continue-on-error: true
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        with: {check-latest: false}
+      - shell: pwsh
+        run: |
+          $v = '${{ steps.run.outputs.dotnet-version }}'
+          Write-Host "resolved: '$v'"
+          if ($v -eq '8.0.100') {
+            Write-Host "::error::Reused an SDK below the global.json floor"
+            exit 1
+          }
+          if ([version]$v -lt [version]'8.0.412') {
+            Write-Host "::error::Resolved '$v', which is below the declared 8.0.412"
+            exit 1
+          }
+          # Without the floor this is where the run would blow up with
+          # "A compatible .NET SDK was not found".
+          dotnet --version
