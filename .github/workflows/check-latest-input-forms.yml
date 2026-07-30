@@ -2,6 +2,10 @@ name: 'check-latest: input forms and offline proof'
 
 on:
   workflow_dispatch:
+  
+env:
+  DOTNET_MULTILEVEL_LOOKUP: '0'
+  DOTNET_NOLOGO: '1'
 
 jobs:
   accepted-boolean-spellings:
@@ -19,13 +23,36 @@ jobs:
           - {value: 'FALSE', expect: 'reuse'}
     steps:
       - uses: actions/checkout@v4
-      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+
+      # Runner images ship .NET preinstalled, which would otherwise satisfy the
+      # 8.0.x request with a newer patch and make 'reuse' indistinguishable
+      # from 'download'.
+      - name: Isolate the .NET install directory
+        shell: bash
+        run: |
+          dir="$RUNNER_TEMP/dotnet-isolated"
+          rm -rf "$dir" && mkdir -p "$dir"
+          echo "DOTNET_INSTALL_DIR=$dir" >> "$GITHUB_ENV"
+
+      - name: Preinstall a deliberately stale baseline
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
+
+      - name: Verify isolation
+        shell: pwsh
+        run: |
+          $sdks = (& dotnet --list-sdks) | ForEach-Object { ($_ -split ' ')[0] }
+          Write-Host "local: $($sdks -join ', ')"
+          if ($sdks.Count -ne 1 -or $sdks[0] -ne '8.0.404') {
+            Write-Host "::error::Isolation failed - expected only 8.0.404"; exit 1
+          }
+
       - id: run
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '8.0.x'
           check-latest: ${{ matrix.value }}
+
       - shell: pwsh
         run: |
           $v = '${{ steps.run.outputs.dotnet-version }}'
@@ -69,6 +96,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Isolate the .NET install directory
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'dotnet-isolated'
+          if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          "DOTNET_INSTALL_DIR=$dir" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Preinstall while the network is available
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
@@ -86,8 +121,8 @@ jobs:
           #
           # Only the lowercase spellings are set: GitHub Actions treats env keys
           # case-insensitively, so declaring both cases is a duplicate-key error.
-          # Lowercase is also the correct choice - curl ignores uppercase
-          # HTTP_PROXY by design, Windows env vars are case-insensitive, and
+          # Lowercase is also correct - curl ignores uppercase HTTP_PROXY by
+          # design, Windows env vars are case-insensitive, and
           # @actions/http-client checks both spellings.
           http_proxy: http://127.0.0.1:9
           https_proxy: http://127.0.0.1:9
@@ -106,6 +141,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Isolate the .NET install directory
+        shell: bash
+        run: |
+          dir="$RUNNER_TEMP/dotnet-isolated"
+          rm -rf "$dir" && mkdir -p "$dir"
+          echo "DOTNET_INSTALL_DIR=$dir" >> "$GITHUB_ENV"
       - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
       - id: online
@@ -123,27 +164,37 @@ jobs:
         run: |
           Write-Host "outcome=${{ steps.online.outcome }}"
           if ('${{ steps.online.outcome }}' -ne 'failure') {
-            Write-Host "::warning::check-latest:true survived the dead proxy - the offline proof above may be weaker than intended"
+            Write-Host "::warning::check-latest:true survived the dead proxy - the offline proof may be weaker than intended"
           }
 
-  # Rough timing signal - reuse should be dramatically faster.
   timing-signal:
+    name: 'reuse should be near-instant'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Isolate the .NET install directory
+        shell: bash
+        run: |
+          dir="$RUNNER_TEMP/dotnet-isolated"
+          rm -rf "$dir" && mkdir -p "$dir"
+          echo "DOTNET_INSTALL_DIR=$dir" >> "$GITHUB_ENV"
       - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
       - id: t1
         shell: pwsh
         run: '"t=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())" | Out-File $env:GITHUB_OUTPUT -Append'
-      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+      - id: run
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '8.0.x'
           check-latest: false
       - shell: pwsh
         run: |
           $elapsed = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() - [int]'${{ steps.t1.outputs.t }}'
-          Write-Host "reuse path took ${elapsed}s"
+          Write-Host "reuse path took ${elapsed}s, resolved '${{ steps.run.outputs.dotnet-version }}'"
+          if ('${{ steps.run.outputs.dotnet-version }}' -ne '8.0.404') {
+            Write-Host "::error::Did not reuse - the timing number is meaningless"; exit 1
+          }
           if ($elapsed -gt 20) {
             Write-Host "::warning::Reuse took ${elapsed}s - suspiciously slow for a no-network path"
           }
