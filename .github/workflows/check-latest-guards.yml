@@ -15,13 +15,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Local SDK is 8.0.404
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
       - name: global.json demands at least 8.0.412
         run: printf '{"sdk":{"version":"8.0.412","rollForward":"latestFeature"}}' > global.json
         shell: bash
       - id: run
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           check-latest: false
       - name: Assert the floor was respected AND dotnet agrees
@@ -47,7 +47,7 @@ jobs:
           - {local: '8.0.414', floor: '8.0.412', label: 'above the floor'}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v5
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '${{ matrix.local }}'}
       - run: printf '{"sdk":{"version":"${{ matrix.floor }}","rollForward":"latestFeature"}}' > global.json
         shell: bash
@@ -57,7 +57,7 @@ jobs:
           $c = ((& dotnet --list-sdks) | Measure-Object).Count
           "count=$c" | Out-File $env:GITHUB_OUTPUT -Append
       - id: run
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {check-latest: false}
       - shell: pwsh
         run: |
@@ -81,13 +81,13 @@ jobs:
           [disable, patch, feature, minor, major, latestPatch, latestFeature, latestMinor, latestMajor]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v5
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
       - run: printf '{"sdk":{"version":"8.0.412","rollForward":"${{ matrix.policy }}"}}' > global.json
         shell: bash
       - id: run
         continue-on-error: true
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {check-latest: false}
       - shell: pwsh
         run: |
@@ -103,12 +103,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v5
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
       - run: printf '{"sdk":{"version":"8.0.404"}}' > global.json
         shell: bash
       - id: run
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {check-latest: false}
       - shell: pwsh
         run: |
@@ -120,14 +120,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v5
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
       - run: |
           mkdir -p build/config
           printf '{"sdk":{"version":"8.0.412","rollForward":"latestFeature"}}' > build/config/global.json
         shell: bash
       - id: run
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           global-json-file: build/config/global.json
           check-latest: false
@@ -147,7 +147,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install a prerelease SDK only
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '10.0'
           dotnet-quality: preview
@@ -160,7 +160,7 @@ jobs:
             Write-Host "::notice::No prerelease present - this job is inconclusive today"
           }
       - id: run
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '10.0'
           dotnet-quality: ga
@@ -181,11 +181,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install a GA SDK only
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
       - id: run
         continue-on-error: true
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '8.0'
           dotnet-quality: ${{ matrix.quality }}
@@ -200,10 +200,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v5
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
       - id: run
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '8.0'
           dotnet-quality: ga
@@ -224,7 +224,7 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v5
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
       - name: Simulate a half-removed installation
         shell: pwsh
@@ -235,7 +235,7 @@ jobs:
           Remove-Item $muxer -Force
           Get-ChildItem (Join-Path $root 'sdk')
       - id: run
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '8.0.404'
           check-latest: false
@@ -258,7 +258,7 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/.dotnet-empty"
           echo "DOTNET_INSTALL_DIR=$GITHUB_WORKSPACE/.dotnet-empty" >> "$GITHUB_ENV"
       - id: run
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '8.0.404'
           check-latest: false
@@ -278,7 +278,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v5
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
       - name: Replace the SDK folder with a symlink to a relocated copy
         run: |
@@ -289,7 +289,7 @@ jobs:
           ln -s "$HOME/relocated/8.0.404" "$ROOT/sdk/8.0.404"
           ls -la "$ROOT/sdk"
       - id: run
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '8.0.x'
           check-latest: false
@@ -312,10 +312,10 @@ jobs:
           - {os: macos-latest,   arch: x64}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v5
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
       - id: run
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '8.0.404'
           architecture: ${{ matrix.arch }}
@@ -342,12 +342,12 @@ jobs:
           - {os: macos-15-intel, arch: x64}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v5
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '8.0.404'
           architecture: ${{ matrix.arch }}
       - id: run
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '8.0.x'
           architecture: ${{ matrix.arch }}
@@ -369,11 +369,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Make a tempting local SDK available
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
       - id: bad
         continue-on-error: true
-        uses: actions/setup-dotnet@v5
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: ${{ matrix.version }}
           check-latest: false
