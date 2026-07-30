@@ -2,9 +2,16 @@ name: 'check-latest: reuse preconditions'
 
 on:
   workflow_dispatch:
-  
+
+env:
+  ACTION: mahabaleshwars/setup-dotnet@feature/762-check-latest
+  DOTNET_MULTILEVEL_LOOKUP: '0'
+  DOTNET_NOLOGO: '1'
+
 jobs:
-  # ---------- Guard 1: global.json rollForward floor ----------
+  # =================================================================
+  # Guard 1: the global.json rollForward floor
+  # =================================================================
   floor-blocks-older-sdk:
     name: 'floor blocks older / ${{ matrix.os }}'
     runs-on: ${{ matrix.os }}
@@ -14,17 +21,41 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
+
+      # Runner images ship .NET preinstalled. Redirect the action at a fresh
+      # empty directory so the "locally installed" inventory is exactly what
+      # this job puts there.
+      - name: Isolate the .NET install directory
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'dotnet-isolated'
+          if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          "DOTNET_INSTALL_DIR=$dir" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "DOTNET_INSTALL_DIR=$dir"
+
       - name: Local SDK is 8.0.404
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
+
+      - name: Verify isolation
+        shell: pwsh
+        run: |
+          $sdks = (& dotnet --list-sdks) | ForEach-Object { ($_ -split ' ')[0] }
+          Write-Host "local: $($sdks -join ', ')"
+          if ($sdks.Count -ne 1 -or $sdks[0] -ne '8.0.404') {
+            Write-Host "::error::Isolation failed - expected only 8.0.404"; exit 1
+          }
+
       - name: global.json demands at least 8.0.412
-        run: printf '{"sdk":{"version":"8.0.412","rollForward":"latestFeature"}}' > global.json
         shell: bash
+        run: printf '{"sdk":{"version":"8.0.412","rollForward":"latestFeature"}}' > global.json
+
       - id: run
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
-        with:
-          check-latest: false
-      - name: Assert the floor was respected AND dotnet agrees
+        with: {check-latest: false}
+
+      - name: Assert the floor was respected AND the CLI agrees
         shell: pwsh
         run: |
           $v = '${{ steps.run.outputs.dotnet-version }}'
@@ -37,6 +68,7 @@ jobs:
           dotnet --version
 
   floor-allows-equal-and-newer:
+    name: 'floor allows ${{ matrix.label }} / ${{ matrix.os }}'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -44,25 +76,34 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
         include:
           - {local: '8.0.412', floor: '8.0.412', label: 'exactly at the floor'}
-          - {local: '8.0.414', floor: '8.0.412', label: 'above the floor'}
+          - {local: '8.0.412', floor: '8.0.404', label: 'above the floor'}
     steps:
       - uses: actions/checkout@v4
+      - name: Isolate the .NET install directory
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'dotnet-isolated'
+          if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          "DOTNET_INSTALL_DIR=$dir" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '${{ matrix.local }}'}
-      - run: printf '{"sdk":{"version":"${{ matrix.floor }}","rollForward":"latestFeature"}}' > global.json
-        shell: bash
+      - shell: bash
+        run: printf '{"sdk":{"version":"${{ matrix.floor }}","rollForward":"latestFeature"}}' > global.json
       - id: before
         shell: pwsh
         run: |
-          $c = ((& dotnet --list-sdks) | Measure-Object).Count
-          "count=$c" | Out-File $env:GITHUB_OUTPUT -Append
+          $sdks = (& dotnet --list-sdks) | ForEach-Object { ($_ -split ' ')[0] }
+          "count=$($sdks.Count)" | Out-File $env:GITHUB_OUTPUT -Append
+          Write-Host "before: $($sdks -join ', ')"
       - id: run
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {check-latest: false}
       - shell: pwsh
         run: |
-          $c = ((& dotnet --list-sdks) | Measure-Object).Count
-          if ($c -ne [int]'${{ steps.before.outputs.count }}') {
+          $sdks = (& dotnet --list-sdks) | ForEach-Object { ($_ -split ' ')[0] }
+          Write-Host "after: $($sdks -join ', ')"
+          if ($sdks.Count -ne [int]'${{ steps.before.outputs.count }}') {
             Write-Host "::error::'${{ matrix.label }}' should have been reused"; exit 1
           }
           if ('${{ steps.run.outputs.dotnet-version }}' -ne '${{ matrix.local }}') {
@@ -70,7 +111,6 @@ jobs:
           }
           dotnet --version
 
-  # Every rollForward policy, with a local SDK that sits below the declared version.
   floor-across-rollforward-policies:
     name: 'rollForward=${{ matrix.policy }}'
     runs-on: ubuntu-latest
@@ -78,13 +118,30 @@ jobs:
       fail-fast: false
       matrix:
         policy:
-          [disable, patch, feature, minor, major, latestPatch, latestFeature, latestMinor, latestMajor]
+          [
+            disable,
+            patch,
+            feature,
+            minor,
+            major,
+            latestPatch,
+            latestFeature,
+            latestMinor,
+            latestMajor
+          ]
     steps:
       - uses: actions/checkout@v4
-      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
-        with: {dotnet-version: '8.0.404'}
-      - run: printf '{"sdk":{"version":"8.0.412","rollForward":"${{ matrix.policy }}"}}' > global.json
+      - name: Isolate the .NET install directory
         shell: bash
+        run: |
+          dir="$RUNNER_TEMP/dotnet-isolated"
+          rm -rf "$dir" && mkdir -p "$dir"
+          echo "DOTNET_INSTALL_DIR=$dir" >> "$GITHUB_ENV"
+      - name: Local SDK sits below the declared version
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        with: {dotnet-version: '8.0.404'}
+      - shell: bash
+        run: printf '{"sdk":{"version":"8.0.412","rollForward":"${{ matrix.policy }}"}}' > global.json
       - id: run
         continue-on-error: true
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
@@ -98,15 +155,26 @@ jobs:
           }
           dotnet --list-sdks
 
-  # No rollForward => exact pin, no floor concept involved.
   global-json-exact-pin-reuses:
-    runs-on: ubuntu-latest
+    name: 'global.json exact pin (no rollForward) reuses'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
+      - name: Isolate the .NET install directory
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'dotnet-isolated'
+          if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          "DOTNET_INSTALL_DIR=$dir" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
-      - run: printf '{"sdk":{"version":"8.0.404"}}' > global.json
-        shell: bash
+      - shell: bash
+        run: printf '{"sdk":{"version":"8.0.404"}}' > global.json
       - id: run
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {check-latest: false}
@@ -115,17 +183,24 @@ jobs:
           if ('${{ steps.run.outputs.dotnet-version }}' -ne '8.0.404') {
             Write-Host "::error::Exact global.json pin was not reused"; exit 1
           }
+          dotnet --version
 
   global-json-custom-path-with-floor:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Isolate the .NET install directory
+        shell: bash
+        run: |
+          dir="$RUNNER_TEMP/dotnet-isolated"
+          rm -rf "$dir" && mkdir -p "$dir"
+          echo "DOTNET_INSTALL_DIR=$dir" >> "$GITHUB_ENV"
       - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
-      - run: |
+      - shell: bash
+        run: |
           mkdir -p build/config
           printf '{"sdk":{"version":"8.0.412","rollForward":"latestFeature"}}' > build/config/global.json
-        shell: bash
       - id: run
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
@@ -137,8 +212,11 @@ jobs:
             Write-Host "::error::Floor from a custom global.json path was ignored"; exit 1
           }
 
-  # ---------- Guard 2: dotnet-quality ----------
+  # =================================================================
+  # Guard 2: dotnet-quality
+  # =================================================================
   quality-ga-will-not-reuse-prerelease:
+    name: 'GA request ignores a local prerelease / ${{ matrix.os }}'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -146,18 +224,25 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
+      - name: Isolate the .NET install directory
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'dotnet-isolated'
+          if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          "DOTNET_INSTALL_DIR=$dir" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - name: Install a prerelease SDK only
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '10.0'
           dotnet-quality: preview
-      - name: Confirm the local SDK really is a prerelease
+      - name: Confirm the precondition
         shell: pwsh
         run: |
           $sdks = (& dotnet --list-sdks) | ForEach-Object { ($_ -split ' ')[0] }
           Write-Host "local: $($sdks -join ', ')"
           if (-not ($sdks | Where-Object { $_ -match '-' })) {
-            Write-Host "::notice::No prerelease present - this job is inconclusive today"
+            Write-Host "::notice::No prerelease available today - this job is inconclusive"
           }
       - id: run
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
@@ -172,6 +257,7 @@ jobs:
           }
 
   quality-preview-will-not-reuse-ga:
+    name: '${{ matrix.quality }} request ignores a local GA / ${{ matrix.os }}'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -180,6 +266,13 @@ jobs:
         quality: [preview, daily]
     steps:
       - uses: actions/checkout@v4
+      - name: Isolate the .NET install directory
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'dotnet-isolated'
+          if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          "DOTNET_INSTALL_DIR=$dir" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - name: Install a GA SDK only
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
@@ -197,9 +290,20 @@ jobs:
           }
 
   quality-ga-reuses-ga:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
+      - name: Isolate the .NET install directory
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'dotnet-isolated'
+          if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          "DOTNET_INSTALL_DIR=$dir" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
       - id: run
@@ -214,7 +318,14 @@ jobs:
             Write-Host "::error::GA + GA should have reused"; exit 1
           }
 
-  # ---------- Guard 3: the dotnet muxer must exist ----------
+  # =================================================================
+  # Guard 3: the dotnet muxer must exist next to the SDK folders
+  # =================================================================
+  # Deleting the muxer and re-requesting the SAME pinned version is a dead end:
+  # install-dotnet sees sdk/8.0.404 on disk, reports "already installed" and
+  # exits, so the muxer is never restored. Requesting a floating spec gives a
+  # clean signal instead - with the guard working the action goes online and
+  # lands a NEWER 8.0 patch; without it, it would have reused 8.0.404.
   missing-muxer-forces-online:
     name: 'broken install / ${{ matrix.os }}'
     runs-on: ${{ matrix.os }}
@@ -224,6 +335,13 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
+      - name: Isolate the .NET install directory
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'dotnet-isolated'
+          if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          "DOTNET_INSTALL_DIR=$dir" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
       - name: Simulate a half-removed installation
@@ -237,26 +355,34 @@ jobs:
       - id: run
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
-          dotnet-version: '8.0.404'
+          dotnet-version: '8.0.x'
           check-latest: false
-      - name: Assert the muxer was restored by an online install
+      - name: Assert the guard forced an online install
         shell: pwsh
         run: |
-          $root = $env:DOTNET_ROOT
-          $muxer = if ($IsWindows) { Join-Path $root 'dotnet.exe' } else { Join-Path $root 'dotnet' }
-          if (-not (Test-Path $muxer)) {
-            Write-Host "::error::Reuse was reported but the CLI is still missing"; exit 1
+          $v = '${{ steps.run.outputs.dotnet-version }}'
+          Write-Host "resolved: $v"
+          if ($v -eq '8.0.404') {
+            Write-Host "::error::Reuse was reported even though the CLI was missing"; exit 1
           }
           & dotnet --version
 
   empty-sdk-directory-forces-online:
-    runs-on: ubuntu-latest
+    name: 'pristine install dir / ${{ matrix.os }}'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
-      - name: Point at a pristine, empty install dir
+      - name: Point at an empty install dir with nothing preinstalled
+        shell: pwsh
         run: |
-          mkdir -p "$GITHUB_WORKSPACE/.dotnet-empty"
-          echo "DOTNET_INSTALL_DIR=$GITHUB_WORKSPACE/.dotnet-empty" >> "$GITHUB_ENV"
+          $dir = Join-Path $env:RUNNER_TEMP 'dotnet-pristine'
+          if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          "DOTNET_INSTALL_DIR=$dir" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - id: run
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
@@ -270,7 +396,7 @@ jobs:
           dotnet --version
 
   symlinked-sdk-folder-is-reused:
-    name: 'symlinked SDK dir (container-image pattern)'
+    name: 'symlinked SDK dir (container-image pattern) / ${{ matrix.os }}'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -278,9 +404,16 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
+      - name: Isolate the .NET install directory
+        shell: bash
+        run: |
+          dir="$RUNNER_TEMP/dotnet-isolated"
+          rm -rf "$dir" && mkdir -p "$dir"
+          echo "DOTNET_INSTALL_DIR=$dir" >> "$GITHUB_ENV"
       - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
       - name: Replace the SDK folder with a symlink to a relocated copy
+        shell: bash
         run: |
           set -eux
           ROOT="$DOTNET_ROOT"
@@ -299,19 +432,29 @@ jobs:
             Write-Host "::error::A symlinked SDK folder was not recognised"; exit 1
           }
 
-  # ---------- Guard 4: cross-architecture ----------
+  # =================================================================
+  # Guard 4: cross-architecture requests always install online
+  # =================================================================
   cross-arch-ignores-check-latest:
-    name: 'cross-arch / ${{ matrix.os }}'
+    name: 'cross-arch ${{ matrix.arch }} / ${{ matrix.os }}'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - {os: ubuntu-latest,  arch: arm64}
+          - {os: ubuntu-latest, arch: arm64}
           - {os: windows-latest, arch: x86}
-          - {os: macos-latest,   arch: x64}
+          - {os: macos-latest, arch: x64}
     steps:
       - uses: actions/checkout@v4
+      - name: Isolate the .NET install directory
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'dotnet-isolated'
+          if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          "DOTNET_INSTALL_DIR=$dir" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "ISOLATED_DIR=$dir" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
       - id: run
@@ -320,28 +463,40 @@ jobs:
           dotnet-version: '8.0.404'
           architecture: ${{ matrix.arch }}
           check-latest: false
-      - name: Assert it installed into an arch-specific directory
+      - name: Assert it installed into the arch-specific subdirectory
         shell: pwsh
         run: |
-          Write-Host "DOTNET_ROOT=$env:DOTNET_ROOT"
-          if ($env:DOTNET_ROOT -notlike '*${{ matrix.arch }}*') {
+          # DOTNET_ROOT stays the base dir; cross-arch installs land in
+          # <DOTNET_INSTALL_DIR>/<architecture> via --install-dir.
+          $archDir = Join-Path $env:ISOLATED_DIR '${{ matrix.arch }}'
+          Write-Host "checking $archDir"
+          if (-not (Test-Path (Join-Path $archDir 'sdk'))) {
+            Get-ChildItem $env:ISOLATED_DIR
             Write-Host "::error::check-latest:false short-circuited a cross-arch request"
             exit 1
           }
+          Get-ChildItem (Join-Path $archDir 'sdk')
 
   native-arch-still-reuses:
-    name: 'explicit native arch still reuses'
+    name: 'explicit native arch still reuses / ${{ matrix.os }}'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - {os: ubuntu-latest,  arch: x64}
+          - {os: ubuntu-latest, arch: x64}
           - {os: windows-latest, arch: x64}
-          - {os: macos-latest,   arch: arm64}
+          - {os: macos-latest, arch: arm64}
           - {os: macos-15-intel, arch: x64}
     steps:
       - uses: actions/checkout@v4
+      - name: Isolate the .NET install directory
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'dotnet-isolated'
+          if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          "DOTNET_INSTALL_DIR=$dir" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '8.0.404'
@@ -358,7 +513,9 @@ jobs:
             Write-Host "::error::An explicitly-native architecture blocked reuse"; exit 1
           }
 
-  # ---------- Guard 5: unparseable / unknown input ----------
+  # =================================================================
+  # Guard 5: unparseable input must still be a hard error
+  # =================================================================
   invalid-spec-still-errors-with-check-latest-false:
     name: 'invalid spec must still fail: ${{ matrix.version }}'
     runs-on: ubuntu-latest
@@ -368,6 +525,12 @@ jobs:
         version: ['8.0.1XX', '8.0.0.0', 'abc', '8.', '8.0.42x']
     steps:
       - uses: actions/checkout@v4
+      - name: Isolate the .NET install directory
+        shell: bash
+        run: |
+          dir="$RUNNER_TEMP/dotnet-isolated"
+          rm -rf "$dir" && mkdir -p "$dir"
+          echo "DOTNET_INSTALL_DIR=$dir" >> "$GITHUB_ENV"
       - name: Make a tempting local SDK available
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with: {dotnet-version: '8.0.404'}
@@ -387,3 +550,4 @@ jobs:
           if ('${{ steps.bad.outputs.dotnet-version }}' -eq '8.0.404') {
             Write-Host "::error::An invalid spec matched a local SDK"; exit 1
           }
+          Write-Host "OK - rejected as expected"
