@@ -2,7 +2,7 @@ name: "check-latest x 'latest' keyword and channels"
 
 on:
   workflow_dispatch:
-  
+
 env:
   DOTNET_MULTILEVEL_LOOKUP: '0'
   DOTNET_NOLOGO: '1'
@@ -25,7 +25,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         include:
-          - {label: '(none)', channel: '', expected: '10.0.101'}
+          - {label: 'none', channel: '', expected: '10.0.101'}
           - {label: '8.0', channel: '8.0', expected: '8.0.412'}
           - {label: '9.0', channel: '9.0', expected: '9.0.308'}
           - {label: '10.0', channel: '10.0', expected: '10.0.101'}
@@ -34,7 +34,7 @@ jobs:
           - {label: '9.0.3xx', channel: '9.0.3xx', expected: '9.0.308'}
           - {label: '10.0.1xx', channel: '10.0.1xx', expected: '10.0.101'}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # Runner images ship .NET preinstalled, which would pollute the local
       # inventory and make every assertion below meaningless.
@@ -106,7 +106,7 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
         channel: ['LTS', 'STS', 'lts', 'sts', 'Lts', 'Sts']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Isolate the .NET install directory
         shell: pwsh
         run: |
@@ -163,7 +163,7 @@ jobs:
           - {channel: 'current'}
           - {channel: 'LTS.0'}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Isolate the .NET install directory
         shell: bash
         run: |
@@ -211,7 +211,7 @@ jobs:
           # padded input - the installer trims before matching
           - {version: '  latest  ', channel: '8.0', expected: '8.0.412'}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Isolate the .NET install directory
         shell: bash
         run: |
@@ -243,23 +243,23 @@ jobs:
   # branch, so preview/daily against a GA-only machine can never reuse.
   # ===================================================================
   latest-with-quality:
-    name: 'latest + ${{ matrix.channel || "(none)" }} + quality ${{ matrix.quality }}'
+    name: 'latest + channel ${{ matrix.label }} + quality ${{ matrix.quality }}'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - {quality: 'ga', channel: '', outcome: 'reuse', expected: '9.0.308'}
-          - {quality: 'ga', channel: '8.0', outcome: 'reuse', expected: '8.0.412'}
-          - {quality: 'ga', channel: '8.0.4xx', outcome: 'reuse', expected: '8.0.412'}
-          - {quality: 'ga', channel: 'LTS', outcome: 'online', expected: ''}
-          - {quality: 'preview', channel: '', outcome: 'online', expected: ''}
-          - {quality: 'preview', channel: '8.0', outcome: 'online', expected: ''}
-          - {quality: 'preview', channel: 'STS', outcome: 'online', expected: ''}
-          - {quality: 'daily', channel: '', outcome: 'online', expected: ''}
-          - {quality: 'daily', channel: '9.0', outcome: 'online', expected: ''}
+          - {label: 'none', quality: 'ga', channel: '', outcome: 'reuse', expected: '9.0.308'}
+          - {label: '8.0', quality: 'ga', channel: '8.0', outcome: 'reuse', expected: '8.0.412'}
+          - {label: '8.0.4xx', quality: 'ga', channel: '8.0.4xx', outcome: 'reuse', expected: '8.0.412'}
+          - {label: 'LTS', quality: 'ga', channel: 'LTS', outcome: 'online', expected: ''}
+          - {label: 'none', quality: 'preview', channel: '', outcome: 'online', expected: ''}
+          - {label: '8.0', quality: 'preview', channel: '8.0', outcome: 'online', expected: ''}
+          - {label: 'STS', quality: 'preview', channel: 'STS', outcome: 'online', expected: ''}
+          - {label: 'none', quality: 'daily', channel: '', outcome: 'online', expected: ''}
+          - {label: '9.0', quality: 'daily', channel: '9.0', outcome: 'online', expected: ''}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Isolate the .NET install directory
         shell: bash
         run: |
@@ -316,7 +316,7 @@ jobs:
           # invalid channel only WARNS when the version is not 'latest'
           - {version: '8.0.412', channel: 'nonsense'}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Isolate the .NET install directory
         shell: bash
         run: |
@@ -351,7 +351,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Isolate the .NET install directory
         shell: pwsh
         run: |
@@ -392,14 +392,19 @@ jobs:
   # exactly as before this feature existed.
   # ===================================================================
   latest-default-still-goes-online:
-    name: 'default true: latest + ${{ matrix.channel || "(none)" }}'
+    name: 'default true: latest + channel ${{ matrix.label }}'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        channel: ['', 'LTS', 'STS', '8.0', '8.0.4xx']
+        include:
+          - {label: 'none', channel: ''}
+          - {label: 'LTS', channel: 'LTS'}
+          - {label: 'STS', channel: 'STS'}
+          - {label: '8.0', channel: '8.0'}
+          - {label: '8.0.4xx', channel: '8.0.4xx'}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Isolate the .NET install directory
         shell: bash
         run: |
