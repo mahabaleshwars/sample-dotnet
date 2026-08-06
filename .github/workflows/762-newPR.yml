@@ -12,7 +12,7 @@ jobs:
         operating-system: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - name: Checkout
-        uses: actions/checkout@6
+        uses: actions/checkout@v6
       - name: Preinstall 9.0.100
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest-input
         with:
