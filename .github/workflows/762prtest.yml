@@ -16,7 +16,7 @@ jobs:
   #     - uses: actions/checkout@v6
   #     - name: Install 8.0.x online (default)
   #       id: setup
-  #       uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+  #       uses: mahabaleshwars/setup-dotnet@feature/762-check-latest-input
   #       with:
   #         dotnet-version: '8.0.x'
   #     - name: Verify SDK works and output is set
@@ -39,12 +39,12 @@ jobs:
       - uses: actions/checkout@v6
       - name: Preinstall 8.0.x (online)
         id: first
-        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest-input
         with:
           dotnet-version: '8.0.x'
       - name: Reuse it with check-latest=false
         id: second
-        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest-input
         with:
           dotnet-version: '8.0.x'
           check-latest: false
@@ -63,12 +63,12 @@ jobs:
       - uses: actions/checkout@v6
       - name: Preinstall a pinned SDK online
         id: first
-        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest-input
         with:
           dotnet-version: '8.0.412'
       - name: Reuse the exact pinned SDK offline-style
         id: second
-        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest-input
         with:
           dotnet-version: '8.0.412'
           check-latest: false
@@ -85,12 +85,12 @@ jobs:
       - uses: actions/checkout@v6
       - name: Preinstall a 1xx-band SDK online
         id: first
-        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest-input
         with:
           dotnet-version: '8.0.1xx'
       - name: Reuse a band-matching SDK offline-style
         id: second
-        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest-input
         with:
           dotnet-version: '8.0.1xx'
           check-latest: false
@@ -110,16 +110,16 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install 8.0.x
-        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest-input
         with:
           dotnet-version: '8.0.x'
       - name: Install 9.0.x
-        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest-input
         with:
           dotnet-version: '9.0.x'
       - name: latest + check-latest=false reuses the highest installed
         id: latest
-        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest-input
         with:
           dotnet-version: latest
           check-latest: false
@@ -142,7 +142,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: Request a version unlikely to be preinstalled
         id: setup
-        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest-input
         with:
           dotnet-version: '9.0.x'
           check-latest: false
@@ -164,7 +164,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: Cross-arch request (x64 on arm64 runner)
         id: setup
-        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest-input
         with:
           dotnet-version: '8.0.x'
           architecture: x64
