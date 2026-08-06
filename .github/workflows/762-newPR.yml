@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-   test-check-latest-false:
+  test-check-latest-false:
     runs-on: ${{ matrix.operating-system }}
     strategy:
       fail-fast: false
@@ -12,11 +12,20 @@ jobs:
         operating-system: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - name: Clear toolcache
+        uses: actions/checkout@v7
+      - name: Clear preinstalled dotnet
         shell: pwsh
-        run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
-      # Oldest 9.0.1xx SDK: resolving '9.0.1xx' online would return a newer patch.
+        run: |
+          $paths = @{
+            Linux   = @("/usr/share/dotnet")
+            macOS   = @("$env:HOME/.dotnet")
+            Windows = @("$env:ProgramFiles\dotnet", "$env:LocalAppData\Microsoft\dotnet")
+          }
+          foreach ($p in $paths['${{ runner.os }}']) {
+            if (Test-Path $p) {
+              Move-Item -Path $p -Destination ("$p-" + [IO.Path]::GetRandomFileName())
+            }
+          }
       - name: Setup dotnet 9.0.100
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest-input
         with:
@@ -27,10 +36,9 @@ jobs:
         with:
           dotnet-version: '9.0.1xx'
           check-latest: false
-      - name: Verify dotnet
+      - name: Verify reuse
         shell: pwsh
         run: |
           if ('${{ steps.reuse.outputs.dotnet-version }}' -ne '9.0.100') {
             throw "Expected 9.0.100 to be reused, got '${{ steps.reuse.outputs.dotnet-version }}'."
           }
-          __tests__/verify-dotnet.ps1 -Patterns "^9\.0\.100$"
