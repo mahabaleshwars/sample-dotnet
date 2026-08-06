@@ -12,11 +12,7 @@ jobs:
         operating-system: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - name: Clear toolcache
-        shell: pwsh
-        run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
-      # An older 9.0 patch: resolving '9.0' online would return a newer one.
+        uses: actions/checkout@7
       - name: Preinstall 9.0.100
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest-input
         with:
