@@ -12,16 +12,20 @@ jobs:
         operating-system: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
+      - name: Clear toolcache
+        shell: pwsh
+        run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
+      # Oldest 9.0.1xx SDK: an online resolve of '9.0.1xx' would return a newer patch.
       - name: Preinstall 9.0.100
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest-input
         with:
           dotnet-version: '9.0.100'
-      - name: Request 9.0 with check-latest false
+      - name: Request 9.0.1xx with check-latest false
         id: reuse
         uses: mahabaleshwars/setup-dotnet@feature/762-check-latest-input
         with:
-          dotnet-version: '9.0'
+          dotnet-version: '9.0.1xx'
           check-latest: false
       - name: Verify dotnet
         shell: pwsh
@@ -29,4 +33,4 @@ jobs:
           if ('${{ steps.reuse.outputs.dotnet-version }}' -ne '9.0.100') {
             throw "Expected 9.0.100 to be reused, got '${{ steps.reuse.outputs.dotnet-version }}'."
           }
-          __tests__/verify-dotnet.ps1 -Patterns "^9\.0\.100$"
+          __tests__/verify-dotnet.ps1 -Patterns "^9\.0\.100$"ps1 -Patterns "^9\.0\.100$"
