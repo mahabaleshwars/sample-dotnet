@@ -1,0 +1,64 @@
+name: Manual - global.json rollForward latestMajor
+
+on:
+  workflow_dispatch:
+    inputs:
+      check-latest:
+        description: 'check-latest value'
+        type: choice
+        options: ['true', 'false']
+        default: 'true'
+
+jobs:
+  latestmajor:
+    runs-on: ${{ matrix.operating-system }}
+    strategy:
+      fail-fast: false
+      matrix:
+        operating-system: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Clear preinstalled dotnet
+        shell: pwsh
+        run: |
+          $paths = @{
+            Linux   = @("/usr/share/dotnet")
+            macOS   = @("$env:HOME/.dotnet")
+            Windows = @("$env:ProgramFiles\dotnet", "$env:LocalAppData\Microsoft\dotnet")
+          }
+          foreach ($p in $paths['${{ runner.os }}']) {
+            if (Test-Path $p) {
+              Move-Item -Path $p -Destination ("$p-" + [IO.Path]::GetRandomFileName())
+            }
+          }
+          
+      - name: Write global.json
+        shell: bash
+        run: |
+          mkdir -p subdirectory
+          echo '{"sdk":{"version":"8.0.100","rollForward":"latestMajor"}}' > ./subdirectory/global.json
+          cat ./subdirectory/global.json
+
+      - name: Setup dotnet
+        id: setup
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest-input
+        with:
+          global-json-file: ./subdirectory/global.json
+          check-latest: ${{ inputs.check-latest }}
+
+      # Must NOT be 8.x — latestMajor widens to the LTS channel.
+      - name: Verify a non-8.x SDK was installed
+        shell: pwsh
+        run: __tests__/verify-dotnet.ps1 -Patterns "^(?!8)"
+
+      - name: Assert no invalid-format failure and LTS resolution
+        shell: bash
+        run: |
+          echo "dotnet-version output: '${{ steps.setup.outputs.dotnet-version }}'"
+          test -n "${{ steps.setup.outputs.dotnet-version }}" || { echo "no version output"; exit 1; }
+          case "${{ steps.setup.outputs.dotnet-version }}" in
+            8.*) echo "FAIL: rolled to 8.x, expected a newer LTS"; exit 1 ;;
+          esac
+          dotnet --list-sdks
