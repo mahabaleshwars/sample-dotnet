@@ -1,0 +1,41 @@
+name: Test DOTNET_CHECK_LATEST
+
+on: workflow_dispatch
+
+jobs:
+  env-var:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Seed the install dir so there is something to reuse.
+      - uses: ./
+        with:
+          dotnet-version: '8.0.x'
+
+      # No 'check-latest' input -> env var must win.
+      - name: Reuse via env var
+        uses: ./
+        env:
+          DOTNET_CHECK_LATEST: false
+        with:
+          dotnet-version: '8.0.x'
+
+      # Input must override the env var.
+      - name: Input beats env var
+        uses: ./
+        env:
+          DOTNET_CHECK_LATEST: false
+        with:
+          dotnet-version: '8.0.x'
+          check-latest: true
+
+      # Bad value must warn and fall back to true.
+      - name: Invalid env value
+        uses: ./
+        env:
+          DOTNET_CHECK_LATEST: yes
+        with:
+          dotnet-version: '8.0.x'
+
+      - run: dotnet --list-sdks
