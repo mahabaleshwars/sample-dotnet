@@ -9,13 +9,13 @@ jobs:
       - uses: actions/checkout@v4
 
       # Seed the install dir so there is something to reuse.
-      - uses: ./
+      - uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         with:
           dotnet-version: '8.0.x'
 
       # No 'check-latest' input -> env var must win.
       - name: Reuse via env var
-        uses: ./
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         env:
           DOTNET_CHECK_LATEST: false
         with:
@@ -23,7 +23,7 @@ jobs:
 
       # Input must override the env var.
       - name: Input beats env var
-        uses: ./
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         env:
           DOTNET_CHECK_LATEST: false
         with:
@@ -32,7 +32,7 @@ jobs:
 
       # Bad value must warn and fall back to true.
       - name: Invalid env value
-        uses: ./
+        uses: mahabaleshwars/setup-dotnet@feature/762-check-latest
         env:
           DOTNET_CHECK_LATEST: yes
         with:
